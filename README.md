@@ -122,6 +122,12 @@ OPENSKY_PASSWORD=your_password
 
 # Optional — satellite tracking
 N2YO_API_KEY=your_key
+
+# Optional — default map starting view
+# Shown values are the built-in defaults.
+NEXT_PUBLIC_OSIRIS_DEFAULT_MAP_LATITUDE=42.70
+NEXT_PUBLIC_OSIRIS_DEFAULT_MAP_LONGITUDE=25.48
+NEXT_PUBLIC_OSIRIS_DEFAULT_MAP_ZOOM=6.5
 ```
 
 > Most features work without any API keys. The platform is designed to be functional out of the box.

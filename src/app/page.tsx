@@ -14,6 +14,7 @@ import ViewPresets from '@/components/ViewPresets';
 import KeyboardShortcuts from '@/components/KeyboardShortcuts';
 import GlobalStatusBar from '@/components/GlobalStatusBar';
 import LiveAlerts from '@/components/LiveAlerts';
+import { DEFAULT_MAP_VIEW } from '@/config/map';
 
 const OsirisMap = dynamic(() => import('@/components/OsirisMap'), { ssr: false });
 const LayerPanel = dynamic(() => import('@/components/LayerPanel'));
@@ -58,8 +59,8 @@ export default function Dashboard() {
   const data = dataRef.current;
 
   const [backendStatus, setBackendStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
-  const [mapView, setMapView] = useState({ zoom: 2.5, latitude: 20 });
-  const [flyToLocation, setFlyToLocation] = useState<{ lat: number; lng: number; ts: number } | null>(null);
+  const [mapView, setMapView] = useState(DEFAULT_MAP_VIEW);
+  const [flyToLocation, setFlyToLocation] = useState<{ lat: number; lng: number; zoom?: number; ts: number } | null>(null);
   const [mouseCoords, setMouseCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationLabel, setLocationLabel] = useState('');
   const [regionDossier, setRegionDossier] = useState<any>(null);
@@ -120,8 +121,9 @@ export default function Dashboard() {
     const lon = parseFloat(p.get('lon') || '');
     const zoom = parseFloat(p.get('zoom') || '');
     if (!isNaN(lat) && !isNaN(lon)) {
-      setFlyToLocation({ lat, lng: lon, ts: Date.now() });
-      if (!isNaN(zoom)) setMapView(v => ({ ...v, zoom }));
+      setFlyToLocation({ lat, lng: lon, zoom: !isNaN(zoom) ? zoom : undefined, ts: Date.now() });
+      if (!isNaN(zoom)) setMapView(v => ({ ...v, latitude: lat, longitude: lon, zoom }));
+      else setMapView(v => ({ ...v, latitude: lat, longitude: lon }));
     }
     const layers = p.get('layers');
     if (layers) {
@@ -141,8 +143,8 @@ export default function Dashboard() {
     if (urlTimer.current) clearTimeout(urlTimer.current);
     urlTimer.current = setTimeout(() => {
       const p = new URLSearchParams();
-      p.set('lat', (mouseCoords?.lat ?? mapView.latitude ?? 20).toFixed(4));
-      p.set('lon', (mouseCoords?.lng ?? 0).toFixed(4));
+      p.set('lat', (mouseCoords?.lat ?? mapView.latitude).toFixed(4));
+      p.set('lon', (mouseCoords?.lng ?? mapView.longitude).toFixed(4));
       p.set('zoom', mapView.zoom.toFixed(2));
       const active = Object.entries(activeLayers).filter(([,v]) => v).map(([k]) => k).join(',');
       p.set('layers', active);
@@ -163,7 +165,15 @@ export default function Dashboard() {
       if (e.key === 'l') setShowLayers(p => !p);
       if (e.key === 'm') setShowMarkets(p => !p);
       if (e.key === 'i') setShowIntel(p => !p);
-      if (e.key === 'r') setFlyToLocation({ lat: 20, lng: 0, ts: Date.now() });
+      if (e.key === 'r') {
+        setMapView(DEFAULT_MAP_VIEW);
+        setFlyToLocation({
+          lat: DEFAULT_MAP_VIEW.latitude,
+          lng: DEFAULT_MAP_VIEW.longitude,
+          zoom: DEFAULT_MAP_VIEW.zoom,
+          ts: Date.now(),
+        });
+      }
       if (e.key === 'g') setMapProjection(p => p === 'globe' ? 'mercator' : 'globe');
     };
     window.addEventListener('keydown', handler);
@@ -543,7 +553,7 @@ export default function Dashboard() {
                 <div><div className="hud-label">NUCLEAR</div><div className="hud-value text-[10px]" style={{ color: '#76FF03' }}>{(data.infrastructure?.length||0)}</div></div>
               </div>
             </motion.div>
-            <ViewPresets onNavigate={(lat, lng, zoom) => { setFlyToLocation({ lat, lng, ts: Date.now() }); setMapView(v => ({ ...v, zoom })); }} />
+            <ViewPresets onNavigate={(lat, lng, zoom) => { setFlyToLocation({ lat, lng, zoom, ts: Date.now() }); setMapView(v => ({ ...v, latitude: lat, longitude: lng, zoom })); }} />
           </>
         )}
         {showMarkets && <MarketsPanel data={data} spaceWeather={spaceWeather} />}
@@ -713,7 +723,7 @@ export default function Dashboard() {
                       </div>
                       <LayerPanel data={data} activeLayers={activeLayers} setActiveLayers={setActiveLayers} />
                       <div className="mt-2">
-                        <ViewPresets onNavigate={(lat, lng, zoom) => { setFlyToLocation({ lat, lng, ts: Date.now() }); setMapView(v => ({ ...v, zoom })); setMobilePanel(null); }} />
+                        <ViewPresets onNavigate={(lat, lng, zoom) => { setFlyToLocation({ lat, lng, zoom, ts: Date.now() }); setMapView(v => ({ ...v, latitude: lat, longitude: lng, zoom })); setMobilePanel(null); }} />
                       </div>
                     </>
                   )}

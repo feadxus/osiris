@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Share2, Copy, Check, Link2, X, Globe, MapPin } from 'lucide-react';
+import { DEFAULT_MAP_VIEW } from '@/config/map';
 
 interface SharePanelProps {
-  mapView: { zoom: number; latitude: number; longitude?: number };
+  mapView: { zoom: number; latitude: number; longitude: number };
   activeLayers: Record<string, boolean>;
   mouseCoords?: { lat: number; lng: number } | null;
 }
@@ -16,8 +17,8 @@ export default function SharePanel({ mapView, activeLayers, mouseCoords }: Share
 
   const generateShareUrl = useCallback(() => {
     const params = new URLSearchParams();
-    const lat = mouseCoords?.lat ?? mapView.latitude ?? 20;
-    const lng = mouseCoords?.lng ?? mapView.longitude ?? 0;
+    const lat = mouseCoords?.lat ?? mapView.latitude ?? DEFAULT_MAP_VIEW.latitude;
+    const lng = mouseCoords?.lng ?? mapView.longitude ?? DEFAULT_MAP_VIEW.longitude;
     params.set('lat', lat.toFixed(4));
     params.set('lon', lng.toFixed(4));
     params.set('zoom', mapView.zoom.toFixed(2));
