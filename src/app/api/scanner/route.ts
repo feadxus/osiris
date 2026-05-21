@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { validateHost } from '@/lib/ssrf-guard';
 
 /**
  * OSIRIS — Scanner Proxy (Hardened)
@@ -35,25 +36,12 @@ function isRateLimited(ip: string): boolean {
 }
 
 // ── TARGET VALIDATION ──
-function isPrivateOrReserved(target: string): boolean {
-  // Block scanning of private/internal IPs and localhost
-  const blocked = [
-    /^10\./,
-    /^172\.(1[6-9]|2[0-9]|3[01])\./,
-    /^192\.168\./,
-    /^127\./,
-    /^0\./,
-    /^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\./,  // CGNAT / Tailscale
-    /^169\.254\./,   // Link-local
-    /^224\./,        // Multicast
-    /^255\./,
-    /^localhost$/i,
-    /^host\.docker\.internal$/i,
-    /\.local$/i,
-    /\.internal$/i,
-  ];
-  return blocked.some(re => re.test(target));
-}
+// The string-based regex previously here matched only literal dotted-quad
+// IPv4, missed every IPv6 form, and never resolved hostnames — so an attacker
+// could bypass it with `target=metadata.example.com` (DNS A → 169.254.169.254),
+// `target=2130706433` (decimal 127.0.0.1), or `target=::1`. Validation now
+// canonicalises the input and resolves hostnames before deciding. See
+// `src/lib/ssrf-guard.ts`.
 
 // ── ALLOWED SCAN TYPES (safe subset only) ──
 const ALLOWED_SCANS: Record<string, { endpoint: string; timeout: number }> = {
@@ -100,8 +88,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Missing target parameter' }, { status: 400 });
   }
 
-  // 4. Block private/internal targets
-  if (isPrivateOrReserved(target)) {
+  // 4. Block private/internal targets (DNS-resolves before deciding so a
+  //    hostname pointing at a reserved range is rejected, and IPv6 + non-
+  //    canonical IPv4 forms are no longer free bypasses).
+  const guard = await validateHost(target);
+  if (!guard.ok) {
     return NextResponse.json({
       error: 'Target blocked',
       detail: 'Scanning private, internal, or reserved addresses is not permitted.',
