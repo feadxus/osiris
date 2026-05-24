@@ -652,7 +652,9 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         <div style="font-size:9px;color:#aaa;margin-bottom:8px;">${p.city}, ${p.country}</div>
         <div style="display:grid;grid-template-columns:1fr;gap:4px;font-size:11px;">
           <div><span style="color:#5C5A54;font-size:9px;">READING</span><br/><span style="color:${color};font-weight:bold;">${p.reading} nSv/h</span></div>
+          <div><span style="color:#5C5A54;font-size:9px;">RAW</span><br/><span style="color:#E8E6E0;">${p.rawValue || 'N/A'} ${p.rawUnit || ''}</span></div>
           <div><span style="color:#5C5A54;font-size:9px;">STATUS</span><br/><span style="color:${color};">${p.status}</span></div>
+          <div><span style="color:#5C5A54;font-size:9px;">CAPTURED</span><br/><span style="color:#E8E6E0;">${p.capturedAt ? new Date(p.capturedAt).toISOString().slice(0, 10) : 'Unknown'}</span></div>
           <div><span style="color:#5C5A54;font-size:9px;">NETWORK</span><br/><span style="color:#E8E6E0;">${p.network}</span></div>
         </div>
       </div>`);
@@ -861,7 +863,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
 
   useEffect(() => {
     if (!mapReady) return;
-    setGeo('radiation', activeLayers.radiation && data.radiation ? data.radiation.map((r: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [r.lng, r.lat] }, properties: { name: r.name, city: r.city, country: r.country, reading: r.reading, status: r.status, network: r.network } })) : []);
+    setGeo('radiation', activeLayers.radiation && data.radiation ? data.radiation.map((r: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [r.lng, r.lat] }, properties: { name: r.name, city: r.city, country: r.country, reading: r.reading, rawValue: r.rawValue, rawUnit: r.rawUnit, status: r.status, network: r.network, capturedAt: r.capturedAt } })) : []);
   }, [mapReady, data.radiation, activeLayers.radiation, setGeo]);
 
   useEffect(() => {
