@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "verify:market-sources": "node --no-warnings scripts/validate-market-research-sources.mjs && node --no-warnings scripts/smoke-market-sources.mjs"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",

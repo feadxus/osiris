@@ -14,6 +14,7 @@ import ViewPresets from '@/components/ViewPresets';
 import KeyboardShortcuts from '@/components/KeyboardShortcuts';
 import GlobalStatusBar from '@/components/GlobalStatusBar';
 import LiveAlerts from '@/components/LiveAlerts';
+import MarketSourcesPanel from '@/components/MarketSourcesPanel';
 
 const OsirisMap = dynamic(() => import('@/components/OsirisMap'), { ssr: false });
 const LayerPanel = dynamic(() => import('@/components/LayerPanel'));
@@ -123,6 +124,7 @@ export default function Dashboard() {
     weather: false,
     radiation: false,
     infrastructure: false,
+    market_sources: false,
     global_incidents: true,
     war_alerts: false,
     gps_jamming: false,
@@ -264,6 +266,7 @@ export default function Dashboard() {
     fetchEndpoint('/api/earthquakes');
     fetchEndpoint('/api/news');
     const marketTimer = setTimeout(() => fetchEndpoint('/api/markets', d => ({ markets: d })), 800);
+    const marketSourcesTimer = setTimeout(() => fetchEndpoint('/api/market-sources', d => ({ market_sources: d.sources, market_source_filters: d.filters, market_source_total: d.total })), 1200);
 
     // Priority 2: Space Weather (needed for MarketsPanel)
     const spaceTimer = setTimeout(async () => {
@@ -281,6 +284,7 @@ export default function Dashboard() {
     ];
     return () => {
       clearTimeout(marketTimer);
+      clearTimeout(marketSourcesTimer);
       clearTimeout(spaceTimer);
       intervals.forEach(clearInterval);
     };
@@ -342,6 +346,11 @@ export default function Dashboard() {
       fetchEndpoint('/api/infrastructure', d => ({ infrastructure: d.infrastructure }));
       layerFetchedRef.current.add('infrastructure');
     }
+    // Market Sources
+    if (activeLayers.market_sources && !layerFetchedRef.current.has('market_sources')) {
+      fetchEndpoint('/api/market-sources', d => ({ market_sources: d.sources, market_source_filters: d.filters, market_source_total: d.total }));
+      layerFetchedRef.current.add('market_sources');
+    }
     // Global Incidents (GDELT)
     if (activeLayers.global_incidents && !layerFetchedRef.current.has('gdelt')) {
       fetchEndpoint('/api/gdelt', d => ({ gdelt: d.events }));
@@ -377,6 +386,10 @@ export default function Dashboard() {
   const totalFlights = useMemo(() => (
     (data.commercial_flights?.length||0)+(data.private_flights?.length||0)+(data.private_jets?.length||0)+(data.military_flights?.length||0)
   ), [data.commercial_flights, data.private_flights, data.private_jets, data.military_flights]);
+
+  const toggleMarketSourceLayer = useCallback(() => {
+    setActiveLayers(prev => ({ ...prev, market_sources: !prev.market_sources }));
+  }, []);
 
 
   return (
@@ -716,13 +729,23 @@ export default function Dashboard() {
                 <div><div className="hud-label">SATS</div><div className="hud-value text-[10px]">{(data.satellites?.length||0).toLocaleString()}</div></div>
                 <div><div className="hud-label">CCTV</div><div className="hud-value text-[10px]">{(data.cameras?.length||0).toLocaleString()}</div></div>
                 <div><div className="hud-label">WEATHER</div><div className="hud-value text-[10px]" style={{ color: '#E040FB' }}>{(data.weather_events?.length||0)}</div></div>
-                <div><div className="hud-label">NUCLEAR</div><div className="hud-value text-[10px]" style={{ color: '#76FF03' }}>{(data.infrastructure?.length||0)}</div></div>
+                <div><div className="hud-label">MARKET</div><div className="hud-value text-[10px]" style={{ color: '#D4AF37' }}>{(data.market_sources?.length||0)}</div></div>
               </div>
             </motion.div>
             <ViewPresets onNavigate={(lat, lng, zoom) => { setFlyToLocation({ lat, lng, ts: Date.now() }); setMapView(v => ({ ...v, zoom })); }} />
           </>
         )}
-        {showMarkets && <MarketsPanel data={data} spaceWeather={spaceWeather} />}
+        {showMarkets && (
+          <>
+            <MarketsPanel data={data} spaceWeather={spaceWeather} />
+            <MarketSourcesPanel
+              sources={data.market_sources || []}
+              isLayerActive={activeLayers.market_sources}
+              onToggleLayer={toggleMarketSourceLayer}
+              onLocate={(lat, lng) => setFlyToLocation({ lat, lng, ts: Date.now() })}
+            />
+          </>
+        )}
         {showIntel && <IntelFeed data={data} onLocate={(lat, lng) => setFlyToLocation({ lat, lng, ts: Date.now() })} />}
       </div>
 
@@ -884,7 +907,7 @@ export default function Dashboard() {
                           <div><div className="hud-label" style={{fontSize:'6px'}}>SAT</div><div className="hud-value text-[9px]">{(data.satellites?.length||0)}</div></div>
                           <div><div className="hud-label" style={{fontSize:'6px'}}>CAM</div><div className="hud-value text-[9px]">{(data.cameras?.length||0)}</div></div>
                           <div><div className="hud-label" style={{fontSize:'6px'}}>WX</div><div className="hud-value text-[9px]" style={{color:'#E040FB'}}>{(data.weather_events?.length||0)}</div></div>
-                          <div><div className="hud-label" style={{fontSize:'6px'}}>NUC</div><div className="hud-value text-[9px]" style={{color:'#76FF03'}}>{(data.infrastructure?.length||0)}</div></div>
+                          <div><div className="hud-label" style={{fontSize:'6px'}}>MKT</div><div className="hud-value text-[9px]" style={{color:'#D4AF37'}}>{(data.market_sources?.length||0)}</div></div>
                         </div>
                       </div>
                       <LayerPanel data={data} activeLayers={activeLayers} setActiveLayers={setActiveLayers} />
@@ -893,7 +916,17 @@ export default function Dashboard() {
                       </div>
                     </>
                   )}
-                  {mobilePanel === 'markets' && <MarketsPanel data={data} spaceWeather={spaceWeather} />}
+                  {mobilePanel === 'markets' && (
+                    <div className="space-y-2">
+                      <MarketsPanel data={data} spaceWeather={spaceWeather} />
+                      <MarketSourcesPanel
+                        sources={data.market_sources || []}
+                        isLayerActive={activeLayers.market_sources}
+                        onToggleLayer={toggleMarketSourceLayer}
+                        onLocate={(lat, lng) => { setFlyToLocation({ lat, lng, ts: Date.now() }); setMobilePanel(null); }}
+                      />
+                    </div>
+                  )}
                   {mobilePanel === 'intel' && <IntelFeed data={data} onLocate={(lat, lng) => { setFlyToLocation({ lat, lng, ts: Date.now() }); setMobilePanel(null); }} />}
                   {mobilePanel === 'search' && (
                     <div className="space-y-2">

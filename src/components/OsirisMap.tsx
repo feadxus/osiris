@@ -45,6 +45,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const prevStyleRef = useRef(mapStyle);
+  const isSmokeMode = process.env.NEXT_PUBLIC_OSIRIS_SMOKE === '1';
 
   // Create aircraft icon on canvas (for WebGL symbol layer)
   const createIcon = useCallback((map: maplibregl.Map, id: string, color: string, size: number) => {
@@ -86,7 +87,12 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     if (!containerRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+      style: isSmokeMode ? {
+        version: 8,
+        glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
+        sources: {},
+        layers: [{ id: 'smoke-background', type: 'background', paint: { 'background-color': '#05050A' } }],
+      } : 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
       center: [25.48, 42.70], zoom: 6.5, minZoom: 1.5, maxZoom: 18,
       attributionControl: false,
       maxPitch: 85,
@@ -108,7 +114,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       createDot(map, 'dot-cctv', '#39FF14', 10);
 
       // Sources
-      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections'];
+      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','market-sources','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections'];
       sources.forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY_FC }));
 
       // ── CONFLICT ZONES — small warning markers (not polygons) ──
@@ -260,6 +266,30 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         'text-offset': [0, 2], 'text-max-width': 14, 'text-allow-overlap': false,
       }, paint: { 'text-color': '#76FF03', 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.7 }});
 
+      // Market research source catalog
+      const marketSourceColor = ['match', ['get','category'],
+        'backbone', '#00E5FF',
+        'cpg_retail', '#D4AF37',
+        'pharma_health', '#00E676',
+        'finance_macro', '#448AFF',
+        'policy_regulation', '#FF9500',
+        'live_risk', '#FF3D3D',
+        '#D4AF37',
+      ] as any;
+      map.addLayer({ id: 'market-sources-glow', type: 'circle', source: 'market-sources', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 1,8, 5,16, 10,26],
+        'circle-color': marketSourceColor, 'circle-opacity': 0.12, 'circle-blur': 1,
+      }});
+      map.addLayer({ id: 'market-sources-dots', type: 'circle', source: 'market-sources', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 1,4, 5,7, 10,11],
+        'circle-color': marketSourceColor, 'circle-opacity': 0.9,
+        'circle-stroke-width': 2, 'circle-stroke-color': '#E8E6E0', 'circle-stroke-opacity': 0.45,
+      }});
+      map.addLayer({ id: 'market-sources-label', type: 'symbol', source: 'market-sources', minzoom: 4, layout: {
+        'text-field': ['get','shortLabel'], 'text-size': ['interpolate',['linear'],['zoom'], 4,8, 8,10, 12,12], 'text-font': ['Open Sans Bold'],
+        'text-offset': [0, 1.7], 'text-max-width': 12, 'text-allow-overlap': false,
+      }, paint: { 'text-color': marketSourceColor, 'text-halo-color': '#000', 'text-halo-width': 1.2, 'text-opacity': 0.82 }});
+
       // Satellites
       map.addLayer({ id: 'sat-dots', type: 'circle', source: 'satellites', paint: {
         'circle-radius': ['interpolate',['linear'],['zoom'], 1,1.5, 5,3], 'circle-color': ['get','color'], 'circle-opacity': 0.7,
@@ -409,6 +439,9 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       }, paint: { 'text-color': ['match', ['get','type'], 'military','#FF1744', 'tanker','#FF9500', 'cargo','#00BCD4', '#fff'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
       setMapReady(true);
+      if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_OSIRIS_SMOKE === '1') {
+        (window as Window & { __OSIRIS_MAP__?: maplibregl.Map }).__OSIRIS_MAP__ = map;
+      }
     });
 
     // Events
@@ -566,7 +599,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
 
 
     // ── Generic hover for clickables ──
-    ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','balloon-dots','rad-dots','ship-dots','sweep-device-dots'].forEach(layer => {
+    ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','market-sources-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','balloon-dots','rad-dots','ship-dots','sweep-device-dots'].forEach(layer => {
       map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
     });
@@ -687,6 +720,42 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       </div>`);
     });
 
+    // ── Market Research Sources ──
+    map.on('click', 'market-sources-dots', e => {
+      if (!e.features?.length) return;
+      const p = e.features[0].properties as any;
+      const coords = (e.features[0].geometry as any).coordinates;
+      const categoryColor: Record<string, string> = {
+        backbone: '#00E5FF',
+        cpg_retail: '#D4AF37',
+        pharma_health: '#00E676',
+        finance_macro: '#448AFF',
+        policy_regulation: '#FF9500',
+        live_risk: '#FF3D3D',
+      };
+      const color = categoryColor[p.category] || '#D4AF37';
+      popup(coords, `<div style="${pStyle}border:1px solid ${color}40;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:6px;">
+          <div>
+            <div style="color:${color};font-size:13px;font-weight:700;letter-spacing:0.08em;">${p.name || 'Market Source'}</div>
+            <div style="font-size:8px;color:#8A8880;letter-spacing:0.16em;text-transform:uppercase;">${p.provider || ''} / ${(p.categoryLabel || p.category || '').replace(/_/g, ' ')}</div>
+          </div>
+          <div style="color:${color};font-size:18px;font-weight:700;">P${p.priority || '0'}</div>
+        </div>
+        <div style="font-size:9px;color:#E8E6E0;line-height:1.45;margin-bottom:8px;">${p.summary || ''}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:9px;margin-bottom:8px;">
+          <div><span style="color:#5C5A54;">ACCESS</span><br/><span style="color:${color};text-transform:uppercase;">${p.access || '—'}</span></div>
+          <div><span style="color:#5C5A54;">CADENCE</span><br/><span style="color:#E8E6E0;text-transform:uppercase;">${(p.cadence || '—').replace(/_/g, ' ')}</span></div>
+          <div><span style="color:#5C5A54;">COVERAGE</span><br/><span style="color:#E8E6E0;text-transform:uppercase;">${(p.coverage || '—').replace(/_/g, ' ')}</span></div>
+        </div>
+        <div style="font-size:8px;color:#8A8880;line-height:1.4;">${p.locationLabel || ''}<br/>${p.caveat || ''}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
+          <a href="${p.docsUrl || '#'}" target="_blank" style="${linkStyle}color:${color};border:1px solid ${color}66;background:${color}18;">API DOCS</a>
+          <a href="https://www.google.com/maps/@${coords[1]},${coords[0]},10z" target="_blank" style="${linkStyle}color:#448AFF;border:1px solid rgba(68,138,255,0.4);background:rgba(68,138,255,0.1);">MAP</a>
+        </div>
+      </div>`);
+    });
+
     // ── Maritime Ports & Naval Bases ──
     map.on('click', 'maritime-dots', e => {
       const p = e.features?.[0]?.properties;
@@ -753,6 +822,18 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
   const setGeo = useCallback((source: string, features: any[]) => {
     const src = mapRef.current?.getSource(source) as any;
     if (src) src.setData({ type: 'FeatureCollection', features });
+    if (source === 'market-sources' && typeof window !== 'undefined' && process.env.NEXT_PUBLIC_OSIRIS_SMOKE === '1') {
+      const smokeWindow = window as Window & {
+        __OSIRIS_MARKET_SOURCE_COUNT__?: number;
+        __OSIRIS_MARKET_SOURCE_SAMPLE__?: { id: string; coordinates: [number, number] };
+      };
+      smokeWindow.__OSIRIS_MARKET_SOURCE_COUNT__ = features.length;
+      const sample = features.find(feature => feature.properties?.id === 'foursquare-places');
+      smokeWindow.__OSIRIS_MARKET_SOURCE_SAMPLE__ = sample ? {
+        id: sample.properties.id,
+        coordinates: sample.geometry.coordinates,
+      } : undefined;
+    }
   }, []);
 
   const setVis = useCallback((ids: string[], visible: boolean) => {
@@ -815,6 +896,31 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     if (!mapReady) return;
     setGeo('infrastructure', activeLayers.infrastructure && data.infrastructure ? data.infrastructure.map((i: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [i.lng, i.lat] }, properties: { name: i.name, city: i.city, country: i.country, status: i.status, reactors: i.reactors, capacityMW: i.capacityMW, owner: i.owner } })) : []);
   }, [mapReady, data.infrastructure, activeLayers.infrastructure, setGeo]);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    setGeo('market-sources', activeLayers.market_sources && data.market_sources ? data.market_sources.map((s: any) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [s.location.lng, s.location.lat] },
+      properties: {
+        id: s.id,
+        name: s.name,
+        shortLabel: s.name.length > 18 ? `${s.name.slice(0, 17)}...` : s.name,
+        provider: s.provider,
+        category: s.category,
+        categoryLabel: s.category.replace(/_/g, ' '),
+        summary: s.summary,
+        access: s.access,
+        auth: s.auth,
+        cadence: s.cadence,
+        coverage: s.coverage,
+        docsUrl: s.docsUrl,
+        priority: s.scores.integrationPriority,
+        locationLabel: s.location.label,
+        caveat: s.caveats?.[0] || '',
+      }
+    })) : []);
+  }, [mapReady, data.market_sources, activeLayers.market_sources, setGeo]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -893,6 +999,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     setVis(['fires-heat'], activeLayers.fires);
     setVis(['weather-glow','weather-dots','weather-label'], activeLayers.weather);
     setVis(['infra-glow','infra-dots','infra-label'], activeLayers.infrastructure);
+    setVis(['market-sources-glow','market-sources-dots','market-sources-label'], activeLayers.market_sources);
     setVis(['maritime-glow','maritime-dots','maritime-label'], activeLayers.maritime);
     setVis(['choke-glow','choke-dots','choke-label'], activeLayers.maritime);
     setVis(['ship-dots','ship-label'], activeLayers.maritime);
