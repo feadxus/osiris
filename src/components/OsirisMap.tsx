@@ -109,7 +109,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       createDot(map, 'dot-cctv', '#39FF14', 10);
 
       // Sources
-      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections', 'scan-targets'];
+      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections', 'scan-targets', 'dep-threats'];
       sources.forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY_FC }));
 
       // ── CONFLICT ZONES — small warning markers (not polygons) ──
@@ -396,6 +396,28 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         'text-offset': [0, 1.2], 'text-max-width': 12, 'text-allow-overlap': false,
       }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
+      // DEP Breach Events — glow + dot + label, colored by dataset type
+      map.addLayer({ id: 'dep-glow', type: 'circle', source: 'dep-threats', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 1,10, 5,18, 10,28],
+        'circle-color': ['match',['get','dset'],'ext','#FF3D3D','prv','#FF9500','dds','#FFD700','nws','#00E5FF','vnd','#E040FB','frm','#00E676','#FF3D3D'],
+        'circle-opacity': 0.12, 'circle-blur': 1,
+      }});
+      map.addLayer({ id: 'dep-dots', type: 'circle', source: 'dep-threats', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 1,4, 5,7, 10,11],
+        'circle-color': ['match',['get','dset'],'ext','#FF3D3D','prv','#FF9500','dds','#FFD700','nws','#00E5FF','vnd','#E040FB','frm','#00E676','#FF3D3D'],
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': ['match',['get','dset'],'ext','#FF3D3D','prv','#FF9500','dds','#FFD700','nws','#00E5FF','vnd','#E040FB','frm','#00E676','#FF3D3D'],
+        'circle-stroke-opacity': 0.5,
+      }});
+      map.addLayer({ id: 'dep-label', type: 'symbol', source: 'dep-threats', minzoom: 6, layout: {
+        'text-field': ['get','victim'], 'text-size': 9, 'text-font': ['Open Sans Regular'],
+        'text-offset': [0, 1.8], 'text-max-width': 14, 'text-allow-overlap': false,
+      }, paint: {
+        'text-color': ['match',['get','dset'],'ext','#FF3D3D','prv','#FF9500','dds','#FFD700','nws','#00E5FF','vnd','#E040FB','frm','#00E676','#FF3D3D'],
+        'text-halo-color': '#000', 'text-halo-width': 1.5, 'text-opacity': 0.8,
+      }});
+
       // Radiation (glow based on reading level)
       map.addLayer({ id: 'rad-glow', type: 'circle', source: 'radiation', paint: {
         'circle-radius': ['interpolate',['linear'],['zoom'], 1,10, 5,20, 10,40],
@@ -582,7 +604,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
 
 
     // ── Generic hover for clickables ──
-    ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','balloon-dots','rad-dots','ship-dots','sweep-device-dots','scan-targets-dots'].forEach(layer => {
+    ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','balloon-dots','rad-dots','dep-dots','ship-dots','sweep-device-dots','scan-targets-dots'].forEach(layer => {
       map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
     });
@@ -655,6 +677,32 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
           <div><span style="color:#5C5A54;font-size:9px;">STATUS</span><br/><span style="color:${color};">${p.status}</span></div>
           <div><span style="color:#5C5A54;font-size:9px;">NETWORK</span><br/><span style="color:#E8E6E0;">${p.network}</span></div>
         </div>
+      </div>`);
+    });
+
+    // ── DEP Breach Events ──
+    map.on('click', 'dep-dots', e => {
+      if (!e.features?.length) return;
+      const p = e.features[0].properties as any;
+      const coords = (e.features[0].geometry as any).coordinates;
+      const dsetColors: Record<string, string> = { ext: '#FF3D3D', prv: '#FF9500', dds: '#FFD700', nws: '#00E5FF', vnd: '#E040FB', frm: '#00E676' };
+      const dsetLabels: Record<string, string> = { ext: 'RANSOMWARE', prv: 'PRIVACY BREACH', dds: 'DDOS', nws: 'OPEN NEWS', vnd: 'VANDALISM', frm: 'UNDERGROUND' };
+      const color = dsetColors[p.dset] || '#FF3D3D';
+      const label = dsetLabels[p.dset] || 'BREACH EVENT';
+      const location = [p.victimCity, p.victimState, p.victimCC].filter(Boolean).join(', ') || '—';
+      popup(coords, `<div style="${pStyle}border:1px solid ${color}40;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="color:${color};font-size:13px;font-weight:700;letter-spacing:0.08em;">${p.victim || '—'}</span>
+          <span style="padding:2px 6px;border-radius:3px;font-size:8px;font-weight:700;letter-spacing:0.1em;background:${color}15;border:1px solid ${color}30;color:${color};">${label}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9px;margin-bottom:8px;">
+          <div><span style="color:#5C5A54;">ACTOR</span><br/><span style="color:${color};font-weight:bold;">${p.actor || '—'}</span></div>
+          <div><span style="color:#5C5A54;">DATE</span><br/><span style="color:#E8E6E0;">${p.date || '—'}</span></div>
+          <div><span style="color:#5C5A54;">SECTOR</span><br/><span style="color:#E8E6E0;">${p.sector || '—'}</span></div>
+          <div><span style="color:#5C5A54;">LOCATION</span><br/><span style="color:#E8E6E0;">${location}</span></div>
+          ${p.site ? `<div style="grid-column:span 2"><span style="color:#5C5A54;">DOMAIN</span><br/><span style="color:#00E5FF;">${p.site}</span></div>` : ''}
+        </div>
+        <div style="font-size:8px;color:#5C5A54;">GEOCODE: ${p.geocodeTier === 'city' ? '📍 CITY-LEVEL' : '🌍 COUNTRY-LEVEL'}</div>
       </div>`);
     });
 
@@ -866,6 +914,16 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
 
   useEffect(() => {
     if (!mapReady) return;
+    setGeo('dep-threats', activeLayers.dep_threats && data.dep_threats
+      ? data.dep_threats.map((v: any) => ({
+          type: 'Feature', geometry: { type: 'Point', coordinates: [v.lng, v.lat] },
+          properties: { victim: v.victim, sector: v.sector, actor: v.actor, date: v.date, site: v.site, dset: v.dset, victimCC: v.victimCC, victimCity: v.victimCity, victimState: v.victimState, geocodeTier: v.geocodeTier },
+        }))
+      : []);
+  }, [mapReady, data.dep_threats, activeLayers.dep_threats, setGeo]);
+
+  useEffect(() => {
+    if (!mapReady) return;
     setGeo('live-news', activeLayers.live_news && data.live_feeds ? data.live_feeds.map((f: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [f.lng, f.lat] }, properties: { name: f.name, city: f.city, country: f.country, url: f.url, category: f.category, embed_allowed: f.embed_allowed !== false } })) : []);
   }, [mapReady, data.live_feeds, activeLayers.live_news, setGeo]);
 
@@ -933,6 +991,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
 
     setVis(['balloon-dots','balloon-label'], activeLayers.balloons);
     setVis(['rad-glow','rad-dots','rad-label'], activeLayers.radiation);
+    setVis(['dep-glow','dep-dots','dep-label'], activeLayers.dep_threats);
     // Sweep layers always visible when data is present (controlled by useEffect)
     setVis(['sweep-connections','sweep-pulse-ring','sweep-device-glow','sweep-device-dots','sweep-device-labels'], true);
   }, [mapReady, activeLayers, setVis]);

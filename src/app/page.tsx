@@ -19,6 +19,7 @@ const OsirisMap = dynamic(() => import('@/components/OsirisMap'), { ssr: false }
 const LayerPanel = dynamic(() => import('@/components/LayerPanel'));
 const CameraViewer = dynamic(() => import('@/components/CameraViewer'));
 const OsintPanel = dynamic(() => import('@/components/OsintPanel'));
+const DepPanel = dynamic(() => import('@/components/DepPanel'));
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -143,6 +144,7 @@ export default function Dashboard() {
     global_incidents: true,
     war_alerts: false,
     gps_jamming: false,
+    dep_threats: false,
     day_night: true,
   });
   const [liveFeedUrl, setLiveFeedUrl] = useState<string | null>(null);
@@ -378,6 +380,11 @@ export default function Dashboard() {
       fetchEndpoint('/api/gdelt', d => ({ gdelt: d.events }));
       layerFetchedRef.current.add('gdelt');
     }
+    // DEP Breach Events
+    if (activeLayers.dep_threats && !layerFetchedRef.current.has('dep_threats')) {
+      fetchEndpoint('/api/dep/privlist', d => ({ dep_threats: d.victims }));
+      layerFetchedRef.current.add('dep_threats');
+    }
 
   }, [activeLayers]);
 
@@ -396,6 +403,9 @@ export default function Dashboard() {
     }
     if (activeLayers.maritime) {
       intervals.push(setInterval(() => fetchEndpoint('/api/maritime', d => ({ maritime_ports: d.ports, maritime_chokepoints: d.chokepoints, maritime_ships: d.ships })), 60000)); // 1m
+    }
+    if (activeLayers.dep_threats) {
+      intervals.push(setInterval(() => fetchEndpoint('/api/dep/privlist', d => ({ dep_threats: d.victims })), 1800000)); // 30 min
     }
     // Fires: no polling needed (data changes very slowly, initial fetch is enough)
     return () => intervals.forEach(clearInterval);
@@ -772,6 +782,7 @@ export default function Dashboard() {
           });
           setFlyToLocation({ lat: data.lat, lng: data.lng, ts: Date.now() });
         }} />
+        <DepPanel />
         <LiveAlerts data={data} onLocate={(lat, lng) => setFlyToLocation({ lat, lng, ts: Date.now() })} onWatchFeed={(url, name) => { setLiveFeedUrl(url); setLiveFeedName(name); }} />
       </div>
 
