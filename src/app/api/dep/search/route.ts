@@ -5,6 +5,10 @@ import { DepDataset } from '../types';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  if (process.env.NEXT_PUBLIC_DEP_SEARCH !== 'true') {
+    return NextResponse.json({ results: [], error: 'DEP search is disabled' }, { status: 503 });
+  }
+
   if (!process.env.DEP_API_KEY || !process.env.DEP_AUTH_ENDPOINT) {
     return NextResponse.json({ results: [], error: 'DEP integration not configured' }, { status: 503 });
   }
