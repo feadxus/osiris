@@ -240,19 +240,6 @@ jobs:
         shell: bash
         run: ota run --container --stream verify .
 
-      - name: Proof native app runtime
-        if: ${{ matrix.full_proof }}
-        timeout-minutes: 30
-        shell: bash
-        run: |
-          ota clean . || true
-          set +e
-          ota proof runtime --workflow app --native --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app.json"
-          status=$?
-          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app.json"
-          ota clean . || true
-          exit "$status"
-
       - name: Proof Docker Compose runtime
         if: ${{ matrix.full_proof }}
         timeout-minutes: 60
@@ -264,6 +251,19 @@ jobs:
           status=$?
           cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-docker.json"
           docker compose down --remove-orphans || true
+          ota clean . || true
+          exit "$status"
+
+      - name: Proof native app runtime
+        if: ${{ matrix.full_proof }}
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          ota clean . || true
+          set +e
+          ota proof runtime --workflow app --native --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app.json"
+          status=$?
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app.json"
           ota clean . || true
           exit "$status"
 
