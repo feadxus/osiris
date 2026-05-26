@@ -506,14 +506,17 @@ agent:
     - README.md
   bootstrap:
     ota:
-      note: Install ota when missing so contributors and agents can execute this contract.
+      note: Install ota when missing so contributors and agents can run the readiness workflows declared in this contract.
       sh: curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION=v1.6.15 sh
       powershell: $env:OTA_VERSION='v1.6.15'; irm https://dist.ota.run/install.ps1 | iex
   notes: |
-    This contract intentionally models only workflows visible in the current repo:
-    npm install/lint/build/dev/start and Docker Compose self-host startup.
-    The repository currently has no canonical test script, so the contract does not invent one.
-    The lint task is visible but intentionally excluded from the default verification path because
-    the current upstream baseline fails `npm run lint`.
-    Agent-safe task claims are intentionally empty in this slice because practical verify paths
-    transitively require dependency hydration and/or mutable local runtime state.
+    Use `ota tasks --use .` to list runnable tasks and review the agent-safe surface before execution.
+    Use `ota run setup:env .` to create `.env` from `.env.template` only when missing.
+    Use `ota up --workflow app --native .` for the canonical host-native dev path.
+    Use `ota up --workflow app:container --container .` for the containerized dev path.
+    Use `ota up --workflow prod --native .` and `ota up --workflow prod:container --container .`
+    for built startup paths.
+    Use `ota up --workflow docker --native .` for the documented Docker Compose self-host flow.
+    Use `ota up --workflow verify --native .` before PRs.
+    No tasks are agent-safe by default in this slice because verification depends on install/network
+    hydration and runtime-state mutation surfaces.
