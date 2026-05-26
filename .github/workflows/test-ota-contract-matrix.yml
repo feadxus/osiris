@@ -3,10 +3,14 @@ name: 'Test: Ota contract matrix'
 on:
   workflow_dispatch:
     inputs:
-      ota_version:
-        description: Ota release version to install for this matrix run
+      ota_repository:
+        description: Ota source repository to build for this matrix run
         required: false
-        default: v1.6.15
+        default: ota-run/ota
+      ota_ref:
+        description: Ota branch, tag, or commit to build for this matrix run
+        required: false
+        default: bobai/gap3-smoke-verdict-contract
   pull_request:
     paths:
       - 'ota.yaml'
@@ -26,7 +30,6 @@ permissions:
 env:
   OTA_NO_UPDATE_CHECK: '1'
   OTA_MATRIX_ARTIFACT_DIR: .ota/contract-matrix
-  OTA_VERSION: ${{ github.event.inputs.ota_version || 'v1.6.15' }}
 
 jobs:
   native:
@@ -62,20 +65,11 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install Ota
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="$OTA_VERSION" sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Install Ota
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $env:OTA_VERSION="${{ env.OTA_VERSION }}"
-          irm https://dist.ota.run/install.ps1 | iex
-          "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: Install ota from source
+        uses: ota-run/ota/.github/actions/install-ota-from-source@v1.6.16
+        with:
+          repository: ${{ github.event.inputs.ota_repository || 'ota-run/ota' }}
+          ref: ${{ github.event.inputs.ota_ref || 'bobai/gap3-smoke-verdict-contract' }}
 
       - name: Prepare artifact directory
         shell: bash
