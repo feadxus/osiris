@@ -68,10 +68,50 @@ Osiris is a production-grade OSINT platform that provides situational awareness 
 ## Features
 
 ### Intelligence Layers
-- **15 toggleable data layers** with real-time entity counts
+- **20 toggleable data layers** with real-time entity counts
 - **GPU-accelerated rendering** — all map data rendered via WebGL, not DOM
 - **Progressive loading** — data fetched on-demand when layers are activated
 - **Viewport-aware** — only loads relevant data for the visible region
+
+#### Layer reference
+
+| Key | Group | Label | Default | Data source |
+|-----|-------|-------|---------|-------------|
+| `flights` | AVIATION | Commercial | off | OpenSky Network |
+| `private` | AVIATION | Private | off | OpenSky Network |
+| `jets` | AVIATION | Private Jets | off | OpenSky Network |
+| `military` | AVIATION | Military | off | OpenSky Network |
+| `maritime` | MARITIME & SPACE | Maritime / Naval | **on** | Static naval intel |
+| `satellites` | MARITIME & SPACE | Satellites | off | N2YO |
+| `cctv` | SURVEILLANCE | CCTV Cameras | **on** | TfL, WSDOT, Caltrans, NYC DOT + more |
+| `live_news` | SURVEILLANCE | Live News Feeds | **on** | 25+ global broadcasters |
+| `earthquakes` | NATURAL HAZARDS | Earthquakes (24h) | **on** | USGS |
+| `fires` | NATURAL HAZARDS | Active Fires | off | NASA FIRMS |
+| `weather` | NATURAL HAZARDS | Severe Weather | off | NASA EONET |
+| `infrastructure` | THREATS & INFRA | Nuclear Facilities | off | Static OSINT intel |
+| `global_incidents` | THREATS & INFRA | Global Incidents | **on** | GDELT |
+| `gps_jamming` | THREATS & INFRA | GPS Jamming | off | Static OSINT intel |
+| `dep_threats` | THREATS & INFRA | DEP Breach Events | off | DEP (requires credentials — see [DEP.md](DEP.md)) |
+| `day_night` | DISPLAY | Day / Night Cycle | **on** | Computed |
+| `balloons` | — | High-altitude Balloons | off | OpenSky Network |
+| `news_intel` | — | News Intelligence | **on** | Internal feed |
+| `radiation` | — | Radiation Monitoring | off | Static OSINT intel |
+| `war_alerts` | — | War / Conflict Alerts | off | Static OSINT intel |
+
+The last four rows have no panel toggle — they are enabled via `NEXT_PUBLIC_DEFAULT_LAYERS` or the `?layers=` URL parameter.
+
+#### Customising which layers are available
+
+Two build-time env vars control layer visibility and defaults (set before `npm run build` or in Vercel → Settings → Environment Variables):
+
+```env
+# Show only these layers in the panel (comma-separated keys). Omit to show all.
+NEXT_PUBLIC_ENABLED_LAYERS=maritime,earthquakes,global_incidents,dep_threats,day_night
+
+# Layers that are ON at startup. Omit to use the built-in defaults above.
+# The ?layers= URL param always takes precedence at runtime.
+NEXT_PUBLIC_DEFAULT_LAYERS=global_incidents,dep_threats,day_night
+```
 
 ### RECON Toolkit
 - **Port Scanner** — TCP connect scan with service fingerprinting
