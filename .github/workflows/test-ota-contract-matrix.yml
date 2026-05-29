@@ -290,6 +290,45 @@ jobs:
           ota clean . || true
           exit "$status"
 
+      - name: Proof container app runtime
+        if: ${{ matrix.full_proof }}
+        timeout-minutes: 45
+        shell: bash
+        run: |
+          ota clean . || true
+          set +e
+          ota proof runtime --workflow app:container --container --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app-container.json"
+          status=$?
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app-container.json"
+          ota clean . || true
+          exit "$status"
+
+      - name: Proof native production runtime
+        if: ${{ matrix.full_proof }}
+        timeout-minutes: 45
+        shell: bash
+        run: |
+          ota clean . || true
+          set +e
+          ota proof runtime --workflow prod --native --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-prod.json"
+          status=$?
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-prod.json"
+          ota clean . || true
+          exit "$status"
+
+      - name: Proof container production runtime
+        if: ${{ matrix.full_proof }}
+        timeout-minutes: 45
+        shell: bash
+        run: |
+          ota clean . || true
+          set +e
+          ota proof runtime --workflow prod:container --container --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-prod-container.json"
+          status=$?
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-prod-container.json"
+          ota clean . || true
+          exit "$status"
+
       - name: Upload matrix artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
