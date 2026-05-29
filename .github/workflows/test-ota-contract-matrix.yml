@@ -356,7 +356,7 @@ jobs:
         run: |
           ota clean . || true
           set +e
-          ota proof runtime --workflow docker --native --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-docker.json"
+          ota proof runtime --workflow docker --native --ready-timeout 25m --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-docker.json"
           status=$?
           cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-docker.json"
           docker compose down --remove-orphans || true
@@ -370,7 +370,7 @@ jobs:
         run: |
           ota clean . || true
           set +e
-          ota proof runtime --workflow app --native --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app.json"
+          ota proof runtime --workflow app --native --ready-timeout 25m --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app.json"
           status=$?
           cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app.json"
           ota clean . || true
@@ -383,7 +383,7 @@ jobs:
         run: |
           ota clean . || true
           set +e
-          ota proof runtime --workflow app:container --container --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app-container.json"
+          ota proof runtime --workflow app:container --container --ready-timeout 25m --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app-container.json"
           status=$?
           cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app-container.json"
           ota clean . || true
@@ -396,7 +396,7 @@ jobs:
         run: |
           ota clean . || true
           set +e
-          ota proof runtime --workflow prod --native --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-prod.json"
+          ota proof runtime --workflow prod --native --ready-timeout 25m --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-prod.json"
           status=$?
           cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-prod.json"
           ota clean . || true
@@ -409,7 +409,7 @@ jobs:
         run: |
           ota clean . || true
           set +e
-          ota proof runtime --workflow prod:container --container --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-prod-container.json"
+          ota proof runtime --workflow prod:container --container --ready-timeout 25m --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-prod-container.json"
           status=$?
           cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-prod-container.json"
           ota clean . || true
