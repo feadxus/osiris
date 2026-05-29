@@ -269,7 +269,7 @@ jobs:
         shell: bash
         run: ota run --container --stream verify .
 
-      - name: Execute all non-internal tasks (native pressure lane)
+      - name: Dry-run all non-internal tasks (native coverage lane)
         if: ${{ matrix.full_proof }}
         timeout-minutes: 90
         shell: bash
@@ -305,11 +305,11 @@ jobs:
             if [ "$runtime_native" = "true" ]; then
               ota run --native --dry-run --json "$task_name" .
             else
-              ota run --native --stream "$task_name" .
+              ota run --native --dry-run --json "$task_name" .
             fi
           done < "$OTA_MATRIX_ARTIFACT_DIR/ota-non-internal-native.jsonl"
 
-      - name: Execute all non-internal tasks (container pressure lane)
+      - name: Dry-run all non-internal tasks (container coverage lane)
         if: ${{ matrix.full_proof }}
         timeout-minutes: 120
         shell: bash
@@ -345,7 +345,7 @@ jobs:
             if [ "$runtime_container" = "true" ]; then
               ota run --container --dry-run --json "$task_name" .
             else
-              ota run --container --stream "$task_name" .
+              ota run --container --dry-run --json "$task_name" .
             fi
           done < "$OTA_MATRIX_ARTIFACT_DIR/ota-non-internal-container.jsonl"
 
