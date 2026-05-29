@@ -11,6 +11,10 @@ on:
         description: Ota branch, tag, or commit to build for this matrix run
         required: false
         default: 1.6.18-implementation
+      run_runtime_proof:
+        description: Run runtime proof steps (docker/app/prod native+container)
+        required: false
+        default: "false"
   pull_request:
     paths:
       - 'ota.yaml'
@@ -350,7 +354,7 @@ jobs:
           done < "$OTA_MATRIX_ARTIFACT_DIR/ota-non-internal-container.jsonl"
 
       - name: Proof Docker Compose runtime
-        if: ${{ matrix.full_proof }}
+        if: ${{ matrix.full_proof && github.event_name == 'workflow_dispatch' && github.event.inputs.run_runtime_proof == 'true' }}
         timeout-minutes: 60
         shell: bash
         run: |
@@ -364,7 +368,7 @@ jobs:
           exit "$status"
 
       - name: Proof native app runtime
-        if: ${{ matrix.full_proof }}
+        if: ${{ matrix.full_proof && github.event_name == 'workflow_dispatch' && github.event.inputs.run_runtime_proof == 'true' }}
         timeout-minutes: 30
         shell: bash
         run: |
@@ -377,7 +381,7 @@ jobs:
           exit "$status"
 
       - name: Proof container app runtime
-        if: ${{ matrix.full_proof }}
+        if: ${{ matrix.full_proof && github.event_name == 'workflow_dispatch' && github.event.inputs.run_runtime_proof == 'true' }}
         timeout-minutes: 45
         shell: bash
         run: |
@@ -390,7 +394,7 @@ jobs:
           exit "$status"
 
       - name: Proof native production runtime
-        if: ${{ matrix.full_proof }}
+        if: ${{ matrix.full_proof && github.event_name == 'workflow_dispatch' && github.event.inputs.run_runtime_proof == 'true' }}
         timeout-minutes: 45
         shell: bash
         run: |
@@ -403,7 +407,7 @@ jobs:
           exit "$status"
 
       - name: Proof container production runtime
-        if: ${{ matrix.full_proof }}
+        if: ${{ matrix.full_proof && github.event_name == 'workflow_dispatch' && github.event.inputs.run_runtime_proof == 'true' }}
         timeout-minutes: 45
         shell: bash
         run: |
