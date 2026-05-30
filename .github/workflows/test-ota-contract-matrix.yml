@@ -10,7 +10,7 @@ on:
       ota_ref:
         description: Ota branch, tag, or commit to build for this matrix run
         required: false
-        default: 1.6.18-implementation
+        default: main
       run_runtime_proof:
         description: Run runtime proof steps (docker/app/prod native+container)
         required: false
@@ -70,10 +70,10 @@ jobs:
           cache: npm
 
       - name: Install ota from source
-        uses: ota-run/ota/.github/actions/install-ota-from-source@v1.6.16
+        uses: ota-run/ota/.github/actions/install-ota-from-source@v1.6.18
         with:
           repository: ${{ github.event.inputs.ota_repository || 'ota-run/ota' }}
-          ref: ${{ github.event.inputs.ota_ref || '1.6.18-implementation' }}
+          ref: ${{ github.event.inputs.ota_ref || 'main' }}
 
       - name: Prepare artifact directory
         shell: bash
