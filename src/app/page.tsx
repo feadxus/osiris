@@ -298,6 +298,33 @@ export default function Dashboard() {
     fetchEndpoint('/api/earthquakes');
     fetchEndpoint('/api/news');
     const marketTimer = setTimeout(() => fetchEndpoint('/api/markets', d => ({ markets: d })), 800);
+    const publicIntelTimers = [
+      setTimeout(() => fetchEndpoint('/api/disasters', d => ({
+        disaster_events: d.events || [],
+        relief_reports: d.reports || [],
+        disaster_sources: d.sources || {},
+      })), 1600),
+      setTimeout(() => fetchEndpoint('/api/cyber-priority', d => ({
+        cyber_priorities: d.priorities || [],
+        cyber_priority_stats: d.stats || null,
+      })), 2200),
+      setTimeout(() => fetchEndpoint('/api/osint/urlhaus', d => ({
+        urlhaus_indicators: d.results || [],
+        urlhaus_source: d.sources?.urlhaus || null,
+      })), 2800),
+      setTimeout(() => fetchEndpoint('/api/weather/forecast?lat=52.52&lng=13.41', d => ({
+        local_forecast: d.forecast || null,
+        forecast_source: d.sources?.openMeteo || null,
+      })), 3400),
+      setTimeout(() => fetchEndpoint('/api/air-quality', d => ({
+        air_quality_stations: d.stations || [],
+        air_quality_source: d.sources?.openaq || null,
+      })), 4200),
+      setTimeout(() => fetchEndpoint('/api/infrastructure/context?south=52.45&west=13.30&north=52.60&east=13.55', d => ({
+        infrastructure_context: d.infrastructure || [],
+        infrastructure_context_source: d.sources?.overpass || null,
+      })), 5200),
+    ];
 
     // Priority 2: Space Weather (needed for MarketsPanel)
     const spaceTimer = setTimeout(async () => {
@@ -315,6 +342,7 @@ export default function Dashboard() {
     ];
     return () => {
       clearTimeout(marketTimer);
+      publicIntelTimers.forEach(clearTimeout);
       clearTimeout(spaceTimer);
       intervals.forEach(clearInterval);
     };
@@ -825,7 +853,7 @@ export default function Dashboard() {
       {/* ── RIGHT TOOL STRIP (desktop only — mobile uses bottom nav) ── */}
       {!isMobile && <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-[250] pointer-events-auto bg-black/40 backdrop-blur-sm p-1 rounded-full border border-white/5">
         <div className="relative group">
-          <button onClick={() => { setShowIntel(!showIntel); setShowMarkets(false); setShowAlerts(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showIntel ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`}>
+          <button aria-label="Open OSINT recon panel" onClick={() => { setShowIntel(!showIntel); setShowMarkets(false); setShowAlerts(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showIntel ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`}>
             <Radar className={`w-4 h-4 ${showIntel ? 'text-[var(--cyan-primary)]' : 'text-white/60'}`} />
           </button>
           {/* OSINT / Recon Panel Slideout */}
@@ -845,7 +873,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowMarkets(!showMarkets); setShowIntel(false); setShowAlerts(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showMarkets ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`}>
+          <button aria-label="Open markets and public intel panel" onClick={() => { setShowMarkets(!showMarkets); setShowIntel(false); setShowAlerts(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showMarkets ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`}>
             <BarChart3 className={`w-4 h-4 ${showMarkets ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
           </button>
           {/* Markets Panel Slideout */}
@@ -859,7 +887,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowAlerts(!showAlerts); setShowIntel(false); setShowMarkets(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showAlerts ? 'bg-[#FF3D3D]/20' : 'hover:bg-white/10'}`}>
+          <button aria-label="Open live alerts panel" onClick={() => { setShowAlerts(!showAlerts); setShowIntel(false); setShowMarkets(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showAlerts ? 'bg-[#FF3D3D]/20' : 'hover:bg-white/10'}`}>
             <AlertTriangle className={`w-4 h-4 ${showAlerts ? 'text-[#FF3D3D]' : 'text-white/60'}`} />
           </button>
           {/* Alerts Panel Slideout */}

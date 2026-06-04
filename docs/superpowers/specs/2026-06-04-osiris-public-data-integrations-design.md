@@ -34,8 +34,8 @@ Implement or upgrade these integrations first:
 
 | Domain | Source | Intended product value |
 | --- | --- | --- |
-| Air quality | OpenAQ v3 | Replace old OpenAQ v2 usage and restore a global air-quality layer. |
-| Humanitarian/disaster impact | ReliefWeb | Add reports and situation updates tied to countries and incidents. |
+| Air quality | OpenAQ v3 | Replace old OpenAQ v2 usage and keep the route non-failing; OpenAQ v3 requires `OPENAQ_API_KEY`. |
+| Humanitarian/disaster impact | ReliefWeb v2 | Add reports and situation updates when `RELIEFWEB_APP_NAME` is configured with an approved app name. |
 | Disaster alerts | GDACS | Add authoritative disaster-alert context to existing hazards. |
 | Cyber prioritization | FIRST EPSS | Rank CVEs by exploitation probability. |
 | Malware and phishing indicators | URLhaus | Enrich RECON results with malicious URL and IOC context. |
@@ -54,6 +54,8 @@ Add connectors that require accounts or keys, but keep them disabled unless conf
 | Live maritime | AISStream | Server-side WebSocket or polling bridge. Disabled without `AISSTREAM_API_KEY`. |
 | Aviation fallback/enrichment | OpenSky OAuth | Used when `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET` exist. |
 | Satellite enrichment | Existing N2YO-style key path or other configured source | Disabled without the matching environment variable. |
+| Air quality activation | OpenAQ v3 | Enabled only when `OPENAQ_API_KEY` exists. |
+| Humanitarian reports activation | ReliefWeb v2 | Enabled only when `RELIEFWEB_APP_NAME` exists and is approved by ReliefWeb. |
 
 ### Phase 3: Correlation Layer
 
@@ -124,8 +126,8 @@ Connectors that are not geospatial, such as EPSS or GLEIF, should still use sour
 
 Add or upgrade routes around product domains, not vendor names:
 
-- `/api/air-quality`: migrate to OpenAQ v3 and keep current consumer contract as stable as practical.
-- `/api/disasters`: compose GDACS and ReliefWeb summaries.
+- `/api/air-quality`: migrate to OpenAQ v3, keep current consumer contract as stable as practical and return a disabled setup state without `OPENAQ_API_KEY`.
+- `/api/disasters`: compose GDACS and ReliefWeb summaries; GDACS is keyless, ReliefWeb is optional through `RELIEFWEB_APP_NAME`.
 - `/api/cyber-priority`: compose EPSS, CISA KEV and NVD/CVE metadata.
 - `/api/infrastructure/context`: compose Overpass/OSM and HIFLD.
 - `/api/entities/resolve`: resolve entity identity from GLEIF and sanctions sources.
