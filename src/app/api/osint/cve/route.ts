@@ -1,11 +1,67 @@
 import { NextResponse } from 'next/server';
+import {
+  fetchEpss,
+  fetchKevCatalog,
+  mergeCvePriority,
+  type CvePriorityRecord,
+} from '@/lib/integrations/cyber-priority';
 import { isRateLimited, getClientIp } from '@/lib/ssrf-guard';
+
+type MitreCveDescription = {
+  lang?: string;
+  value?: string;
+};
+
+type MitreCvssMetric = {
+  cvssV3_1?: { baseScore?: number; vectorString?: string; baseSeverity?: string };
+  cvssV3_0?: { baseScore?: number; vectorString?: string; baseSeverity?: string };
+  cvssV31?: { baseScore?: number; vectorString?: string; baseSeverity?: string };
+  cvssV2_0?: { baseScore?: number; vectorString?: string };
+  cvssV2?: { baseScore?: number; vectorString?: string };
+};
+
+type MitreCveReference = {
+  url?: string;
+};
+
+type MitreAffectedVersion = {
+  version?: string;
+};
+
+type MitreAffectedProduct = {
+  vendor?: string;
+  product?: string;
+  versions?: MitreAffectedVersion[];
+};
+
+type MitreCveApiResponse = {
+  cveMetadata?: {
+    cveId?: string;
+    datePublished?: string;
+    dateUpdated?: string;
+  };
+  containers?: {
+    cna?: {
+      descriptions?: MitreCveDescription[];
+      metrics?: MitreCvssMetric[];
+      problemTypes?: Array<{
+        descriptions?: Array<{
+          cweId?: string;
+          description?: string;
+        }>;
+      }>;
+      references?: MitreCveReference[];
+      affected?: MitreAffectedProduct[];
+    };
+  };
+};
 
 // CVE Intelligence — fetches vulnerability details from CIRCL CVE API (free, no key)
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const cve = searchParams.get('cve');
   if (!cve) return NextResponse.json({ error: 'Missing cve parameter' }, { status: 400 });
+  const normalizedCve = cve.toUpperCase();
 
   const clientIp = getClientIp(req);
   if (isRateLimited(clientIp, 30, 60_000)) {
@@ -18,7 +74,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const res = await fetch(`https://cveawg.mitre.org/api/cve/${encodeURIComponent(cve.toUpperCase())}`, {
+    const res = await fetch(`https://cveawg.mitre.org/api/cve/${encodeURIComponent(normalizedCve)}`, {
       signal: AbortSignal.timeout(8000),
       headers: { 'Accept': 'application/json' },
     });
@@ -26,14 +82,15 @@ export async function GET(req: Request) {
     if (!res.ok) {
       // Fallback to CIRCL
       try {
-        const circlRes = await fetch(`https://cve.circl.lu/api/cve/${encodeURIComponent(cve.toUpperCase())}`, {
+        const circlRes = await fetch(`https://cve.circl.lu/api/cve/${encodeURIComponent(normalizedCve)}`, {
           signal: AbortSignal.timeout(8000),
           headers: { 'Accept': 'application/json' },
         });
         if (circlRes.ok) {
           const data = await circlRes.json();
+          const priority = await resolveCvePriority(normalizedCve, data.cvss ?? null);
           return NextResponse.json({
-            id: data.id || cve.toUpperCase(),
+            id: data.id || normalizedCve,
             description: data.summary || 'No description available.',
             cvss: data.cvss ?? null,
             cvss_vector: data.cvss_vector || null,
@@ -42,24 +99,27 @@ export async function GET(req: Request) {
             modified: data.Modified || null,
             cwe: data.cwe || null,
             source: 'circl',
+            priority,
           });
         }
       } catch { /* fall through */ }
 
+      const priority = await resolveCvePriority(normalizedCve, null);
       return NextResponse.json({
-        id: cve.toUpperCase(),
+        id: normalizedCve,
         description: 'CVE details could not be retrieved at this time.',
         cvss: null,
         references: [],
         source: 'unavailable',
+        priority,
       });
     }
 
-    const data = await res.json();
+    const data = (await res.json()) as MitreCveApiResponse;
 
     // Parse the CVE 5.0 JSON format from MITRE
     const cna = data.containers?.cna;
-    const description = cna?.descriptions?.find((d: any) => d.lang === 'en')?.value
+    const description = cna?.descriptions?.find(d => d.lang === 'en')?.value
       || cna?.descriptions?.[0]?.value
       || 'No description available.';
 
@@ -95,17 +155,20 @@ export async function GET(req: Request) {
     }
 
     // Extract references
-    const references = (cna?.references || []).slice(0, 5).map((r: any) => r.url);
+    const references = (cna?.references || []).slice(0, 5).map(r => r.url);
 
     // Extract affected products
-    const affected = (cna?.affected || []).slice(0, 5).map((a: any) => ({
+    const affected = (cna?.affected || []).slice(0, 5).map(a => ({
       vendor: a.vendor || 'Unknown',
       product: a.product || 'Unknown',
-      versions: (a.versions || []).slice(0, 3).map((v: any) => v.version).filter(Boolean),
+      versions: (a.versions || []).slice(0, 3).map(v => v.version).filter(Boolean),
     }));
 
+    const responseCve = data.cveMetadata?.cveId || normalizedCve;
+    const priority = await resolveCvePriority(responseCve, cvss);
+
     return NextResponse.json({
-      id: data.cveMetadata?.cveId || cve.toUpperCase(),
+      id: responseCve,
       description,
       cvss,
       cvss_vector,
@@ -116,8 +179,23 @@ export async function GET(req: Request) {
       published: data.cveMetadata?.datePublished || null,
       modified: data.cveMetadata?.dateUpdated || null,
       source: 'mitre',
+      priority,
     });
   } catch {
     return NextResponse.json({ error: 'CVE lookup failed' }, { status: 500 });
   }
+}
+
+async function resolveCvePriority(cve: string, cvss: number | null): Promise<CvePriorityRecord> {
+  const [epssResult, kevResult] = await Promise.allSettled([
+    fetchEpss([cve]),
+    fetchKevCatalog(),
+  ]);
+
+  const epss = epssResult.status === 'fulfilled' ? epssResult.value.get(cve.toUpperCase()) : null;
+  const kev = kevResult.status === 'fulfilled'
+    ? kevResult.value.find(item => item.cveID?.toUpperCase() === cve.toUpperCase()) || null
+    : null;
+
+  return mergeCvePriority({ cve, epss, kev, cvss });
 }

@@ -21,6 +21,20 @@ const LayerPanel = dynamic(() => import('@/components/LayerPanel'));
 const CameraViewer = dynamic(() => import('@/components/CameraViewer'));
 const OsintPanel = dynamic(() => import('@/components/OsintPanel'));
 
+type MapBbox = {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+};
+
+type MapViewState = {
+  zoom: number;
+  latitude: number;
+  longitude: number;
+  bbox?: MapBbox;
+};
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -42,8 +56,9 @@ function useIsMobile() {
 }
 const UptimeClock = () => {
   const [uptime, setUptime] = useState('00:00:00');
-  const startTime = useRef(Date.now());
+  const startTime = useRef(0);
   useEffect(() => {
+    startTime.current = Date.now();
     const iv = setInterval(() => {
       const e = Math.floor((Date.now() - startTime.current) / 1000);
       setUptime(`${String(Math.floor(e/3600)).padStart(2,'0')}:${String(Math.floor((e%3600)/60)).padStart(2,'0')}:${String(e%60).padStart(2,'0')}`);
@@ -81,13 +96,33 @@ function getYouTubeWatchUrl(url: string): string {
   return url;
 }
 
+function getCampingBbox(view: MapViewState): string | null {
+  const centerLng = Number.isFinite(view.longitude) ? view.longitude : 25.48;
+  const centerLat = Number.isFinite(view.latitude) ? view.latitude : 42.7;
+  const maxSpan = view.zoom >= 9 ? 1.2 : 2.4;
+  const rawWest = view.bbox?.west ?? centerLng - maxSpan / 2;
+  const rawEast = view.bbox?.east ?? centerLng + maxSpan / 2;
+  const rawSouth = view.bbox?.south ?? centerLat - maxSpan / 2;
+  const rawNorth = view.bbox?.north ?? centerLat + maxSpan / 2;
+
+  if (![rawWest, rawEast, rawSouth, rawNorth].every(Number.isFinite)) return null;
+
+  const west = Math.max(-180, Math.max(rawWest, centerLng - maxSpan / 2));
+  const east = Math.min(180, Math.min(rawEast, centerLng + maxSpan / 2));
+  const south = Math.max(-85, Math.max(rawSouth, centerLat - maxSpan / 2));
+  const north = Math.min(85, Math.min(rawNorth, centerLat + maxSpan / 2));
+
+  if (east <= west || north <= south) return null;
+  return [west, south, east, north].map(value => value.toFixed(3)).join(',');
+}
+
 export default function Dashboard() {
   const dataRef = useRef<any>({});
   const [dataVersion, setDataVersion] = useState(0);
   const data = dataRef.current;
 
   const [backendStatus, setBackendStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
-  const [mapView, setMapView] = useState({ zoom: 2.5, latitude: 20 });
+  const [mapView, setMapView] = useState<MapViewState>({ zoom: 6.5, latitude: 42.7, longitude: 25.48 });
   const [flyToLocation, setFlyToLocation] = useState<{ lat: number; lng: number; ts: number } | null>(null);
   const [globalStats, setGlobalStats] = useState<any>(null);
   const mouseCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -112,13 +147,12 @@ export default function Dashboard() {
   const [demoMode, setDemoMode] = useState(false);
 
   const isMobile = useIsMobile();
-  const startTime = useRef(Date.now());
   const geocodeCache = useRef<Map<string, string>>(new Map());
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastGeocodedPos = useRef<{ lat: number; lng: number } | null>(null);
 
   // ── DEFAULT: Most layers OFF — fast initial load ──
-  const [activeLayers, setActiveLayers] = useState({
+  const [activeLayers, setActiveLayers] = useState<Record<string, boolean>>({
     flights: false,
     private: false,
     jets: false,
@@ -127,8 +161,10 @@ export default function Dashboard() {
     satellites: false,
     balloons: false,
     cctv: true,
+    camping: false,
     live_news: true,
     news_intel: true,
+    rail_germany: false,
     earthquakes: true,
     fires: false,
     weather: false,
@@ -185,7 +221,7 @@ export default function Dashboard() {
     urlTimer.current = setTimeout(() => {
       const p = new URLSearchParams();
       p.set('lat', (mapView.latitude ?? 20).toFixed(4));
-      p.set('lon', '0');
+      p.set('lon', (mapView.longitude ?? 0).toFixed(4));
       p.set('zoom', mapView.zoom.toFixed(2));
       const active = Object.entries(activeLayers).filter(([,v]) => v).map(([k]) => k).join(',');
       p.set('layers', active);
@@ -298,6 +334,33 @@ export default function Dashboard() {
     fetchEndpoint('/api/earthquakes');
     fetchEndpoint('/api/news');
     const marketTimer = setTimeout(() => fetchEndpoint('/api/markets', d => ({ markets: d })), 800);
+    const publicIntelTimers = [
+      setTimeout(() => fetchEndpoint('/api/disasters', d => ({
+        disaster_events: d.events || [],
+        relief_reports: d.reports || [],
+        disaster_sources: d.sources || {},
+      })), 1600),
+      setTimeout(() => fetchEndpoint('/api/cyber-priority', d => ({
+        cyber_priorities: d.priorities || [],
+        cyber_priority_stats: d.stats || null,
+      })), 2200),
+      setTimeout(() => fetchEndpoint('/api/osint/urlhaus', d => ({
+        urlhaus_indicators: d.results || [],
+        urlhaus_source: d.sources?.urlhaus || null,
+      })), 2800),
+      setTimeout(() => fetchEndpoint('/api/weather/forecast?lat=52.52&lng=13.41', d => ({
+        local_forecast: d.forecast || null,
+        forecast_source: d.sources?.openMeteo || null,
+      })), 3400),
+      setTimeout(() => fetchEndpoint('/api/air-quality', d => ({
+        air_quality_stations: d.stations || [],
+        air_quality_source: d.sources?.openaq || null,
+      })), 4200),
+      setTimeout(() => fetchEndpoint('/api/infrastructure/context?south=52.45&west=13.30&north=52.60&east=13.55', d => ({
+        infrastructure_context: d.infrastructure || [],
+        infrastructure_context_source: d.sources?.overpass || null,
+      })), 5200),
+    ];
 
     // Priority 2: Space Weather (needed for MarketsPanel)
     const spaceTimer = setTimeout(async () => {
@@ -315,6 +378,7 @@ export default function Dashboard() {
     ];
     return () => {
       clearTimeout(marketTimer);
+      publicIntelTimers.forEach(clearTimeout);
       clearTimeout(spaceTimer);
       intervals.forEach(clearInterval);
     };
@@ -366,6 +430,32 @@ export default function Dashboard() {
       fetchEndpoint('/api/live-news', d => ({ live_feeds: d.feeds }));
       layerFetchedRef.current.add('live_news');
     }
+    // Germany rail network
+    if (activeLayers.rail_germany && !layerFetchedRef.current.has('rail_germany')) {
+      fetchEndpoint('/api/rail/germany', d => ({
+        rail_germany: d.stations || [],
+        rail_germany_lines: d.lines || [],
+        rail_germany_operations: d.operations?.stationStatus || [],
+        rail_germany_operation_stats: d.operations?.stats || null,
+        rail_germany_stats: d.stats,
+        rail_germany_sources: d.sources,
+      }));
+      layerFetchedRef.current.add('rail_germany');
+    }
+    // Camping sites
+    if (activeLayers.camping) {
+      const bbox = getCampingBbox(mapView);
+      if (bbox) {
+        const key = `camping:${bbox}`;
+        if (!layerFetchedRef.current.has(key)) {
+          fetchEndpoint(`/api/camping?bbox=${bbox}`, d => ({
+            camping_sites: d.sites || [],
+            camping_sources: d.sources,
+          }));
+          layerFetchedRef.current.add(key);
+        }
+      }
+    }
     // Weather
     if (activeLayers.weather && !layerFetchedRef.current.has('weather')) {
       fetchEndpoint('/api/weather', d => ({ weather_events: d.events }));
@@ -410,7 +500,7 @@ export default function Dashboard() {
     }
 
 
-  }, [activeLayers]);
+  }, [activeLayers, mapView, fetchEndpoint]);
 
   // ── LAYER-AWARE POLLING — only poll data for active layers ──
   useEffect(() => {
@@ -825,7 +915,7 @@ export default function Dashboard() {
       {/* ── RIGHT TOOL STRIP (desktop only — mobile uses bottom nav) ── */}
       {!isMobile && <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-[250] pointer-events-auto bg-black/40 backdrop-blur-sm p-1 rounded-full border border-white/5">
         <div className="relative group">
-          <button onClick={() => { setShowIntel(!showIntel); setShowMarkets(false); setShowAlerts(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showIntel ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`}>
+          <button aria-label="Open OSINT recon panel" onClick={() => { setShowIntel(!showIntel); setShowMarkets(false); setShowAlerts(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showIntel ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`}>
             <Radar className={`w-4 h-4 ${showIntel ? 'text-[var(--cyan-primary)]' : 'text-white/60'}`} />
           </button>
           {/* OSINT / Recon Panel Slideout */}
@@ -845,7 +935,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowMarkets(!showMarkets); setShowIntel(false); setShowAlerts(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showMarkets ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`}>
+          <button aria-label="Open markets and public intel panel" onClick={() => { setShowMarkets(!showMarkets); setShowIntel(false); setShowAlerts(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showMarkets ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`}>
             <BarChart3 className={`w-4 h-4 ${showMarkets ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
           </button>
           {/* Markets Panel Slideout */}
@@ -859,7 +949,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowAlerts(!showAlerts); setShowIntel(false); setShowMarkets(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showAlerts ? 'bg-[#FF3D3D]/20' : 'hover:bg-white/10'}`}>
+          <button aria-label="Open live alerts panel" onClick={() => { setShowAlerts(!showAlerts); setShowIntel(false); setShowMarkets(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showAlerts ? 'bg-[#FF3D3D]/20' : 'hover:bg-white/10'}`}>
             <AlertTriangle className={`w-4 h-4 ${showAlerts ? 'text-[#FF3D3D]' : 'text-white/60'}`} />
           </button>
           {/* Alerts Panel Slideout */}
