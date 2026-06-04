@@ -4,7 +4,7 @@ import { memo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plane, Satellite, Activity, Sun, AlertTriangle, Camera, Flame,
-  CloudLightning, Radiation, Tv, Anchor, Ship,
+  CloudLightning, Radiation, Tv, Anchor, Ship, Network,
   Share2, Radio, Train, Shield, MapPinned
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';

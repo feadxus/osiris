@@ -64,7 +64,7 @@ export async function GET(req: Request) {
       total: infrastructure.length,
       facilities: stations.length,
       lines: lines.length,
-      infrastructure_only: false,
+      infrastructure_only: !includeOperations,
       operations_enabled: includeOperations,
     },
     partial: Boolean(overpassError) || operationErrors.length > 0,
@@ -75,7 +75,7 @@ export async function GET(req: Request) {
           ? okSourceStatus('OpenStreetMap/Overpass', OVERPASS_INTERPRETER_URL)
           : disabledSourceStatus('OpenStreetMap/Overpass', 'Using fast static German rail infrastructure fallback; pass overpass=true for live OSM enrichment.', OVERPASS_INTERPRETER_URL),
       dbTransportRest: !includeOperations
-        ? okSourceStatus('db.transport.rest', DB_TRANSPORT_REST_URL)
+        ? disabledSourceStatus('db.transport.rest', 'Live rail operations disabled for infrastructure-only response; omit operations=false to monitor departures.', DB_TRANSPORT_REST_URL)
         : operationErrors.length > 0
           ? errorSourceStatus('db.transport.rest', `${operationStatuses.length}/${operationHubLimit} hubs loaded`, DB_TRANSPORT_REST_URL)
           : okSourceStatus('db.transport.rest', DB_TRANSPORT_REST_URL),
