@@ -70,7 +70,7 @@ const LAYER_GROUPS: LayerGroup[] = [
     layers: [
       { key: 'cctv', label: 'CCTV Cameras', icon: Camera, color: '#39FF14', dataKey: 'cameras' },
       { key: 'live_news', label: 'Live News Feeds', icon: Tv, color: '#FF4081', dataKey: 'live_feeds' },
-      { key: 'rail_germany', label: 'DE Rail Infra', icon: Train, color: '#FFD54F', dataKey: 'rail_germany,rail_germany_lines' },
+      { key: 'rail_germany', label: 'DE Rail Data', icon: Train, color: '#FFD54F', dataKey: 'rail_germany,rail_germany_lines,rail_germany_operations' },
       { key: 'camping', label: 'Campingplaetze', icon: MapPinned, color: '#9CCC65', dataKey: 'camping_sites' },
     ],
   },

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import {
+  fallbackCampingSites,
   fetchCampingSites,
   type CampingBbox,
 } from '@/lib/integrations/camping-sites';
@@ -35,16 +36,21 @@ export async function GET(req: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Overpass camping lookup failed';
+    const fallbackSites = fallbackCampingSites(bbox);
     return NextResponse.json({
-      sites: [],
-      total: 0,
+      sites: fallbackSites,
+      total: fallbackSites.length,
       bbox,
       timestamp: new Date().toISOString(),
       sources: {
         overpass: errorSourceStatus('OpenStreetMap/Overpass', message, 'https://overpass-api.de/api/interpreter'),
+        fallback: fallbackSites.length > 0
+          ? okSourceStatus('OSIRIS fallback dataset')
+          : errorSourceStatus('OSIRIS fallback dataset', 'No fallback camping sites in bbox'),
       },
       error: message,
-    }, { status: message.includes('bbox') ? 400 : 502 });
+      partial: fallbackSites.length > 0,
+    }, { status: message.includes('bbox') ? 400 : 200 });
   }
 }
 

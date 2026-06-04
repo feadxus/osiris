@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildOverpassCampingQuery,
+  fallbackCampingSites,
   normalizeCampingElement,
 } from './camping-sites.ts';
 
@@ -38,4 +39,16 @@ test('normalizes Overpass camping element', () => {
   assert.equal(item?.website, 'https://example.com');
   assert.equal(item?.capacity, '40');
   assert.equal(item?.source.provider, 'OpenStreetMap/Overpass');
+});
+
+test('returns fallback camping sites inside bbox when Overpass is unavailable', () => {
+  const sites = fallbackCampingSites({
+    south: 42.4,
+    west: 25.0,
+    north: 43.3,
+    east: 26.0,
+  });
+
+  assert.ok(sites.some(site => site.name === 'Camping Veliko Tarnovo'));
+  assert.equal(sites[0].source.provider, 'OSIRIS fallback dataset');
 });

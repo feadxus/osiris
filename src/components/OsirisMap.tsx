@@ -618,6 +618,32 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       popupRef.current?.remove();
       popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: '420px', offset: 14 }).setLngLat(coords).setHTML(html).addTo(map);
     };
+    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[char] || char));
+    const safeExternalUrl = (value: unknown) => {
+      if (typeof value !== 'string') return '';
+      try {
+        const url = new URL(value);
+        return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : '';
+      } catch {
+        return '';
+      }
+    };
+    const safeJsonArray = (value: unknown) => {
+      if (Array.isArray(value)) return value;
+      if (typeof value !== 'string') return [];
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    };
     const pStyle = `background:rgba(12,14,26,0.95);backdrop-filter:blur(16px);border-radius:10px;padding:16px;font-family:'JetBrains Mono',monospace;`;
     const linkStyle = `display:inline-block;margin-top:8px;padding:5px 12px;font-size:10px;letter-spacing:0.12em;text-decoration:none;border-radius:5px;font-family:'JetBrains Mono',monospace;`;
 
@@ -684,18 +710,21 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       const coords = (e.features[0].geometry as any).coordinates;
       const color = p.kind === 'caravan_site' ? '#FFB74D' : '#9CCC65';
       const typeLabel = p.kind === 'caravan_site' ? 'CARAVAN SITE' : 'CAMP SITE';
+      const website = safeExternalUrl(p.website);
+      const osmType = ['node', 'way', 'relation'].includes(p.osmType) ? p.osmType : 'node';
+      const osmId = /^\d+$/.test(String(p.osmId || '')) ? p.osmId : '';
       popup(coords, `<div style="${pStyle}border:1px solid ${color}40;">
-        <div style="color:${color};font-size:13px;font-weight:700;margin-bottom:4px;">${p.name || 'Camping site'}</div>
+        <div style="color:${color};font-size:13px;font-weight:700;margin-bottom:4px;">${escapeHtml(p.name || 'Camping site')}</div>
         <div style="font-size:9px;color:#8A8880;margin-bottom:8px;">${typeLabel} / OpenStreetMap</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9px;margin-bottom:8px;">
-          <div><span style="color:#5C5A54;">OPERATOR</span><br/><span style="color:#E8E6E0;">${p.operator || '-'}</span></div>
-          <div><span style="color:#5C5A54;">CAPACITY</span><br/><span style="color:#E8E6E0;">${p.capacity || '-'}</span></div>
-          <div><span style="color:#5C5A54;">PHONE</span><br/><span style="color:#E8E6E0;">${p.phone || '-'}</span></div>
+          <div><span style="color:#5C5A54;">OPERATOR</span><br/><span style="color:#E8E6E0;">${escapeHtml(p.operator || '-')}</span></div>
+          <div><span style="color:#5C5A54;">CAPACITY</span><br/><span style="color:#E8E6E0;">${escapeHtml(p.capacity || '-')}</span></div>
+          <div><span style="color:#5C5A54;">PHONE</span><br/><span style="color:#E8E6E0;">${escapeHtml(p.phone || '-')}</span></div>
           <div><span style="color:#5C5A54;">COORDS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(3)}, ${coords[0].toFixed(3)}</span></div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          ${p.website ? `<a href="${p.website}" target="_blank" style="${linkStyle}color:${color};border:1px solid ${color}66;background:${color}18;">WEBSITE</a>` : ''}
-          <a href="https://www.openstreetmap.org/${p.osmType || 'node'}/${p.osmId || ''}" target="_blank" style="${linkStyle}color:#C5E1A5;border:1px solid rgba(197,225,165,0.4);background:rgba(197,225,165,0.1);">OSM</a>
+          ${website ? `<a href="${website}" target="_blank" rel="noopener noreferrer" style="${linkStyle}color:${color};border:1px solid ${color}66;background:${color}18;">WEBSITE</a>` : ''}
+          ${osmId ? `<a href="https://www.openstreetmap.org/${osmType}/${osmId}" target="_blank" rel="noopener noreferrer" style="${linkStyle}color:#C5E1A5;border:1px solid rgba(197,225,165,0.4);background:rgba(197,225,165,0.1);">OSM</a>` : ''}
           <a href="https://www.google.com/maps/@${coords[1]},${coords[0]},15z" target="_blank" style="${linkStyle}color:#448AFF;border:1px solid rgba(68,138,255,0.4);background:rgba(68,138,255,0.1);">MAP</a>
         </div>
       </div>`);
@@ -815,7 +844,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     });
 
     // ── Generic hover for clickables ──
-    ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','rail-dots','rail-lines','balloon-dots','rad-dots','ship-dots','sweep-device-dots','scan-targets-dots','sdk-sea','sdk-sea-glow','sdk-sea-atmo','sdk-air','sdk-air-glow','sdk-air-atmo','sdk-intel','sdk-intel-glow','sdk-intel-atmo'].forEach(layer => {
+    ['conflict-icons','cctv-dots','camping-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','rail-dots','rail-lines','balloon-dots','rad-dots','ship-dots','sweep-device-dots','scan-targets-dots','sdk-sea','sdk-sea-glow','sdk-sea-atmo','sdk-air','sdk-air-glow','sdk-air-atmo','sdk-intel','sdk-intel-glow','sdk-intel-atmo'].forEach(layer => {
       map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
     });
@@ -1037,12 +1066,12 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       const coords = e.lngLat;
       popup([coords.lng, coords.lat], `<div style="${pStyle}border:1px solid rgba(255,213,79,0.35);">
         <div style="color:#FFD54F;font-size:13px;font-weight:700;margin-bottom:4px;">GERMAN RAIL LINE</div>
-        <div style="font-size:12px;color:#E8E6E0;margin-bottom:8px;">${p.name || p.ref || 'Rail line'}</div>
+        <div style="font-size:12px;color:#E8E6E0;margin-bottom:8px;">${escapeHtml(p.name || p.ref || 'Rail line')}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9px;">
-          <div><span style="color:#5C5A54;">USAGE</span><br/><span style="color:#E8E6E0;">${p.usage || '—'}</span></div>
-          <div><span style="color:#5C5A54;">ELECTRIFIED</span><br/><span style="color:#E8E6E0;">${p.electrified || '—'}</span></div>
-          <div><span style="color:#5C5A54;">OPERATOR</span><br/><span style="color:#E8E6E0;">${p.operator || '—'}</span></div>
-          <div><span style="color:#5C5A54;">GAUGE</span><br/><span style="color:#E8E6E0;">${p.gauge || '—'}</span></div>
+          <div><span style="color:#5C5A54;">USAGE</span><br/><span style="color:#E8E6E0;">${escapeHtml(p.usage || '—')}</span></div>
+          <div><span style="color:#5C5A54;">ELECTRIFIED</span><br/><span style="color:#E8E6E0;">${escapeHtml(p.electrified || '—')}</span></div>
+          <div><span style="color:#5C5A54;">OPERATOR</span><br/><span style="color:#E8E6E0;">${escapeHtml(p.operator || '—')}</span></div>
+          <div><span style="color:#5C5A54;">GAUGE</span><br/><span style="color:#E8E6E0;">${escapeHtml(p.gauge || '—')}</span></div>
         </div>
       </div>`);
     });
@@ -1052,16 +1081,35 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       const p = e.features[0].properties as any;
       const coords = (e.features[0].geometry as any).coordinates;
       const kindColor = p.kind === 'yard' ? '#FF9500' : p.kind === 'depot' ? '#00BCD4' : p.kind === 'junction' ? '#76FF03' : p.kind === 'halt' ? '#D4AF37' : '#FFD54F';
+      const operationColor = p.operationStatus === 'severe' || p.operationStatus === 'cancelled' ? '#FF1744' : p.operationStatus === 'delayed' ? '#FF9500' : p.operationStatus === 'on_time' ? '#76FF03' : '#8A8880';
+      const departures = safeJsonArray(p.departures).slice(0, 4);
+      const operationsHtml = p.operationStatus
+        ? `<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);">
+            <div style="color:${operationColor};font-size:10px;font-weight:700;letter-spacing:0.1em;margin-bottom:6px;">LIVE OPS</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9px;margin-bottom:6px;">
+              <div><span style="color:#5C5A54;">STATUS</span><br/><span style="color:${operationColor};">${escapeHtml(String(p.operationStatus).toUpperCase())}</span></div>
+              <div><span style="color:#5C5A54;">DELAYS</span><br/><span style="color:#E8E6E0;">${Number(p.delayedDepartures || 0) + Number(p.severeDepartures || 0)}</span></div>
+              <div><span style="color:#5C5A54;">CANCELLED</span><br/><span style="color:#FF1744;">${p.cancelledDepartures || 0}</span></div>
+              <div><span style="color:#5C5A54;">PLATFORM CHG</span><br/><span style="color:#FFD54F;">${p.platformChanges || 0}</span></div>
+            </div>
+            ${departures.map((departure: any) => `<div style="display:flex;justify-content:space-between;gap:8px;border-top:1px solid rgba(255,255,255,0.06);padding-top:5px;margin-top:5px;font-size:9px;">
+              <span style="color:#E8E6E0;">${escapeHtml(departure.line || 'TRAIN')}</span>
+              <span style="color:#8A8880;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(departure.direction || '')}</span>
+              <span style="color:${departure.status === 'severe' ? '#FF1744' : departure.status === 'delayed' ? '#FF9500' : '#76FF03'};">${departure.delayMinutes ? `+${escapeHtml(departure.delayMinutes)}` : 'OK'}</span>
+            </div>`).join('')}
+          </div>`
+        : '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);color:#8A8880;font-size:9px;">LIVE OPS not loaded for this station.</div>';
       popup(coords, `<div style="${pStyle}border:1px solid ${kindColor}40;">
         <div style="color:${kindColor};font-size:13px;font-weight:700;margin-bottom:4px;">GERMAN RAIL INFRA</div>
-        <div style="font-size:12px;color:#E8E6E0;margin-bottom:8px;">${p.name || 'Rail infrastructure'}</div>
+        <div style="font-size:12px;color:#E8E6E0;margin-bottom:8px;">${escapeHtml(p.name || 'Rail infrastructure')}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9px;margin-bottom:8px;">
-          <div><span style="color:#5C5A54;">TYPE</span><br/><span style="color:${kindColor};">${(p.kind || 'station').toUpperCase()}</span></div>
-          <div><span style="color:#5C5A54;">NETWORK</span><br/><span style="color:#E8E6E0;">${p.network || '—'}</span></div>
-          <div><span style="color:#5C5A54;">OPERATOR</span><br/><span style="color:#E8E6E0;">${p.operator || '—'}</span></div>
-          <div><span style="color:#5C5A54;">UIC / REF</span><br/><span style="color:#E8E6E0;">${p.uicRef || p.ref || '—'}</span></div>
+          <div><span style="color:#5C5A54;">TYPE</span><br/><span style="color:${kindColor};">${escapeHtml(String(p.kind || 'station').toUpperCase())}</span></div>
+          <div><span style="color:#5C5A54;">NETWORK</span><br/><span style="color:#E8E6E0;">${escapeHtml(p.network || '—')}</span></div>
+          <div><span style="color:#5C5A54;">OPERATOR</span><br/><span style="color:#E8E6E0;">${escapeHtml(p.operator || '—')}</span></div>
+          <div><span style="color:#5C5A54;">UIC / REF</span><br/><span style="color:#E8E6E0;">${escapeHtml(p.uicRef || p.ref || '—')}</span></div>
           <div><span style="color:#5C5A54;">COORDS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(3)}°, ${coords[0].toFixed(3)}°</span></div>
         </div>
+        ${operationsHtml}
       </div>`);
     });
 
@@ -1234,20 +1282,52 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
 
   useEffect(() => {
     if (!mapReady) return;
+    setGeo('camping', activeLayers.camping && data.camping_sites ? data.camping_sites
+      .filter((site: any) => typeof site.lng === 'number' && typeof site.lat === 'number')
+      .map((site: any) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [site.lng, site.lat] },
+        properties: {
+          name: site.name,
+          kind: site.kind,
+          operator: site.operator,
+          website: site.website,
+          phone: site.phone,
+          capacity: site.capacity,
+          osmType: site.id?.split('-')[1],
+          osmId: site.id?.split('-')[2],
+        },
+      })) : []);
+  }, [mapReady, data.camping_sites, activeLayers.camping, setGeo]);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    const operationsByStation = new Map<string, any>(
+      (data.rail_germany_operations || []).map((operation: any) => [operation.stationId, operation]),
+    );
     setGeo('rail-germany', activeLayers.rail_germany && data.rail_germany ? data.rail_germany
       .filter((item: any) => typeof item.lng === 'number' && typeof item.lat === 'number')
-      .map((item: any) => ({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [item.lng, item.lat] },
-      properties: {
-        name: item.name,
-        kind: item.kind,
-        operator: item.operator,
-        network: item.network,
-        uicRef: item.uicRef,
-        ref: item.ref,
-      },
-    })) : []);
+      .map((item: any) => {
+        const operation = operationsByStation.get(item.uicRef) || operationsByStation.get(item.id);
+        return {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [item.lng, item.lat] },
+          properties: {
+            name: item.name,
+            kind: item.kind,
+            operator: item.operator,
+            network: item.network,
+            uicRef: item.uicRef,
+            ref: item.ref,
+            operationStatus: operation?.status,
+            delayedDepartures: operation?.delayedDepartures || 0,
+            severeDepartures: operation?.severeDepartures || 0,
+            cancelledDepartures: operation?.cancelledDepartures || 0,
+            platformChanges: operation?.platformChanges || 0,
+            departures: JSON.stringify(operation?.departures || []),
+          },
+        };
+      }) : []);
     setGeo('rail-germany-lines', activeLayers.rail_germany && data.rail_germany_lines ? data.rail_germany_lines
       .filter((item: any) => item.geometry?.type === 'LineString')
       .map((item: any) => ({
@@ -1264,7 +1344,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
           gauge: item.gauge,
         },
       })) : []);
-  }, [mapReady, data.rail_germany, data.rail_germany_lines, activeLayers.rail_germany, setGeo]);
+  }, [mapReady, data.rail_germany, data.rail_germany_lines, data.rail_germany_operations, activeLayers.rail_germany, setGeo]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -1320,6 +1400,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     setVis(['fl-jets'], activeLayers.jets);
     setVis(['fl-military'], activeLayers.military);
     setVis(['cctv-glow','cctv-dots','cctv-label'], activeLayers.cctv);
+    setVis(['camping-glow','camping-dots','camping-label'], activeLayers.camping);
     setVis(['fires-heat'], activeLayers.fires);
     setVis(['weather-glow','weather-dots','weather-label'], activeLayers.weather);
     setVis(['infra-glow','infra-dots','infra-label'], activeLayers.infrastructure);

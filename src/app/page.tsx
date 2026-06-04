@@ -56,8 +56,9 @@ function useIsMobile() {
 }
 const UptimeClock = () => {
   const [uptime, setUptime] = useState('00:00:00');
-  const startTime = useRef(Date.now());
+  const startTime = useRef(0);
   useEffect(() => {
+    startTime.current = Date.now();
     const iv = setInterval(() => {
       const e = Math.floor((Date.now() - startTime.current) / 1000);
       setUptime(`${String(Math.floor(e/3600)).padStart(2,'0')}:${String(Math.floor((e%3600)/60)).padStart(2,'0')}:${String(e%60).padStart(2,'0')}`);
@@ -146,7 +147,6 @@ export default function Dashboard() {
   const [demoMode, setDemoMode] = useState(false);
 
   const isMobile = useIsMobile();
-  const startTime = useRef(Date.now());
   const geocodeCache = useRef<Map<string, string>>(new Map());
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastGeocodedPos = useRef<{ lat: number; lng: number } | null>(null);
@@ -435,6 +435,8 @@ export default function Dashboard() {
       fetchEndpoint('/api/rail/germany', d => ({
         rail_germany: d.stations || [],
         rail_germany_lines: d.lines || [],
+        rail_germany_operations: d.operations?.stationStatus || [],
+        rail_germany_operation_stats: d.operations?.stats || null,
         rail_germany_stats: d.stats,
         rail_germany_sources: d.sources,
       }));
