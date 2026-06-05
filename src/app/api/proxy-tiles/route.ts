@@ -8,9 +8,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Only allow cartocdn.com domains to prevent open proxy abuse
+    // Only allow cartocdn.com domains to prevent open proxy abuse.
+    // Match the full domain or any subdomain — a plain endsWith check
+    // would also accept e.g. evilcartocdn.com.
     const targetUrl = new URL(url);
-    if (!targetUrl.hostname.endsWith('cartocdn.com')) {
+    const host = targetUrl.hostname.toLowerCase();
+    if (host !== 'cartocdn.com' && !host.endsWith('.cartocdn.com')) {
       return NextResponse.json({ error: 'Forbidden domain' }, { status: 403 });
     }
 
