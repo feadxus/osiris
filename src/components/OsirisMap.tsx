@@ -16,6 +16,8 @@ interface OsirisMapProps {
   mapStyle?: string;
   sweepData?: any;
   scanTargets?: any[];
+  pins?: any[];
+  screenshotTick?: number;
   demoMode?: boolean;
 }
 
@@ -41,7 +43,7 @@ function computeSolarTerminator(): [number, number][] {
 
 const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
 
-function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', mapStyle = 'dark', sweepData, scanTargets = [], demoMode = false }: OsirisMapProps) {
+function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', mapStyle = 'dark', sweepData, scanTargets = [], pins = [], screenshotTick = 0, demoMode = false }: OsirisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
@@ -166,7 +168,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       createDot(map, 'dot-cctv', '#39FF14', 10);
 
       // Sources
-      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections', 'scan-targets', 'sdk-entities', 'sdk-links', 'ioda-outages', 'malware-nodes', 'network-mesh'];
+      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'intel-pins', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections', 'scan-targets', 'sdk-entities', 'sdk-links', 'ioda-outages', 'malware-nodes', 'network-mesh'];
       sources.forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY_FC }));
 
       // Warning icon generator (parameterized — eliminates 3x copy-paste)
@@ -499,6 +501,34 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         'text-offset': [0, 1.5], 'text-allow-overlap': false,
       }, paint: { 'text-color': ['match', ['get','status'], 'DANGER','#FF1744', 'WARNING','#FF9500', '#AB47BC'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
+      // Intel Pins
+      map.addLayer({ id: 'intel-pins-glow', type: 'circle', source: 'intel-pins', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 2,6, 8,10, 14,18],
+        'circle-color': ['get','color'],
+        'circle-opacity': 0.25,
+        'circle-blur': 2,
+      }});
+      map.addLayer({ id: 'intel-pins-core', type: 'circle', source: 'intel-pins', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 2,4, 8,7, 14,12],
+        'circle-color': ['get','color'],
+        'circle-opacity': 0.85,
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#000',
+      }});
+      map.addLayer({ id: 'intel-pins-label', type: 'symbol', source: 'intel-pins', minzoom: 6, layout: {
+        'text-field': ['get','title'],
+        'text-size': ['interpolate',['linear'],['zoom'], 6,7, 12,10, 18,13],
+        'text-font': ['Open Sans Bold'],
+        'text-offset': [0, 1.5],
+        'text-allow-overlap': false,
+        'text-anchor': 'top',
+      }, paint: {
+        'text-color': ['get','color'],
+        'text-halo-color': '#000',
+        'text-halo-width': 1.5,
+        'text-opacity': 0.9,
+      }});
+
       // ══ OSIRIS SDK — Lattice Intelligence Mesh ══
       // Polybolos Style: Delicate, translucent, steel-blue splined mesh
 
@@ -789,6 +819,15 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','balloon-dots','rad-dots','ship-dots','sweep-device-dots','scan-targets-dots','sdk-sea','sdk-sea-glow','sdk-sea-atmo','sdk-air','sdk-air-glow','sdk-air-atmo','sdk-intel','sdk-intel-glow','sdk-intel-atmo','malware-dots','ioda-dots'].forEach(layer => {
       map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
+    });
+
+    // ── Intel Pin click ──
+    map.on('click', 'intel-pins-core', (e: any) => {
+      const p = e.features?.[0]?.properties;
+      if (!p) return;
+      const coords = e.features[0].geometry.coordinates.slice();
+      map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 8), duration: 1000 });
+      popup(coords, "<div style='font-family:monospace;font-size:11px;max-width:280px;color:#e0e0e0;background:#0a0a14;border:1px solid " + (p.color || "#D4AF37") + ";border-radius:4px;padding:8px 10px'><strong style='color:" + (p.color || "#D4AF37") + "'>" + (p.title || "PIN") + "</strong><br><span style='font-size:10px;color:#888'>" + (p.description || "") + "</span></div>");
     });
 
     // ── Scan Targets click ──
@@ -1369,6 +1408,52 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     const src = map.getSource('scan-targets') as maplibregl.GeoJSONSource;
     if (src) src.setData({ type: 'FeatureCollection', features });
   }, [scanTargets, mapReady]);
+
+  // Intel Pins — update markers when pins prop changes
+  useEffect(() => {
+    if (!mapReady) return;
+    const src = mapRef.current?.getSource('intel-pins') as any;
+    if (!src) return;
+    const pinFeatures = (pins || []).map((p: any) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+      properties: {
+        id: p.id,
+        title: p.title,
+        description: p.description || '',
+        severity: p.severity,
+        color: p.severity === 'critical' ? '#D500F9' : p.severity === 'alert' ? '#FF3D3D' : p.severity === 'watch' ? '#FFD500' : '#39FF14',
+      },
+    }));
+    src.setData({ type: 'FeatureCollection', features: pinFeatures });
+    ['intel-pins-glow', 'intel-pins-core', 'intel-pins-label'].forEach((id: string) => {
+      const l = mapRef.current?.getLayer(id);
+      if (l) mapRef.current?.setLayoutProperty(id, 'visibility', pinFeatures.length > 0 ? 'visible' : 'none');
+    });
+  }, [mapReady, pins]);
+
+  // Screenshot capture
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || screenshotTick === 0) return;
+    const map = mapRef.current;
+    // Wait a frame for UI to settle
+    requestAnimationFrame(() => {
+      try {
+        const canvas = map.getCanvas();
+        const dataUrl = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        const now = new Date();
+        const ts = now.toISOString().slice(0, 19).replace(/[:-]/g, '');
+        link.download = `osiris_screenshot_${ts}.png`;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (e) {
+        console.warn('[OSIRIS] Screenshot failed:', e);
+      }
+    });
+  }, [mapReady, screenshotTick]);
 
   // Fly-to
   useEffect(() => {

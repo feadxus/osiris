@@ -3,11 +3,14 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, BarChart3, Newspaper, Search, X, Globe, MapPinned, Radar, Satellite, Moon, ExternalLink, AlertTriangle, Activity, Database, Wifi, Play, Network } from 'lucide-react';
+import { Layers, BarChart3, Newspaper, Search, X, Globe, MapPinned, Radar, Satellite, Moon, ExternalLink, AlertTriangle, Activity, Camera, Database, Wifi, Play, Network } from 'lucide-react';
 import IntelFeed from '@/components/IntelFeed';
 import MarketsPanel from '@/components/MarketsPanel';
 import ScmPanel from '@/components/ScmPanel';
-import SearchBar from '@/components/SearchBar';
+import CountrySearch from '@/components/CountrySearch';
+import WatchlistPanel from '@/components/WatchlistPanel';
+import IntelPinsPanel from '@/components/IntelPinsPanel';
+import { loadPins, savePins } from '@/lib/intel-pins';
 import ScaleBar from '@/components/ScaleBar';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import SharePanel from '@/components/SharePanel';
@@ -105,6 +108,13 @@ export default function Dashboard() {
   const [showScmPanel, setShowScmPanel] = useState(true);
   const [showIntel, setShowIntel] = useState(false);
   const [showEntityGraph, setShowEntityGraph] = useState(false);
+  const [showWatchlist, setShowWatchlist] = useState(false);
+    const [pins, setPins] = useState<any[]>([]);
+  // Load pins from localStorage on mount, persist on change
+  useEffect(() => { setPins(loadPins()); }, []);
+  useEffect(() => { if (pins.length > 0 || localStorage.getItem('osiris_intel_pins')) savePins(pins); }, [pins]);
+  const [pendingPin, setPendingPin] = useState<{ lat: number; lng: number } | null>(null);
+  const [screenshotTick, setScreenshotTick] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<'layers'|'markets'|'intel'|'search'|'recon'|null>(null);
   const [mapProjection, setMapProjection] = useState<'globe'|'mercator'>('globe');
@@ -259,6 +269,7 @@ export default function Dashboard() {
 
   // Region dossier (right-click)
   const handleRightClick = useCallback(async (coords: { lat: number; lng: number }) => {
+    setPendingPin(coords);
     setDossierLoading(true); setRegionDossier(null);
     try {
       const res = await fetch(`/api/region-dossier?lat=${coords.lat}&lng=${coords.lng}`);
@@ -752,6 +763,8 @@ export default function Dashboard() {
           flyToLocation={flyToLocation}
           sweepData={sweepData}
           scanTargets={scanTargets}
+          pins={pins}
+          screenshotTick={screenshotTick}
           demoMode={demoMode}
         />
       </ErrorBoundary>
@@ -829,6 +842,8 @@ export default function Dashboard() {
         <span className="text-[10px] font-bold tracking-[0.2em] text-[var(--text-muted)] opacity-50 ml-2">V.4.1</span>
       </motion.div>
 
+
+
       {/* ── MOBILE: Compact top status ── */}
       {isMobile && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2.5 }} className="absolute top-3 right-3 z-[200] pointer-events-auto flex items-center gap-2">
@@ -841,11 +856,31 @@ export default function Dashboard() {
 
 
 
+      {/* ── COUNTRY SEARCH (Desktop) ── */}
+      {!isMobile && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 3.5, duration: 0.6 }}
+          className="absolute top-[4.5rem] left-[290px] z-[200] pointer-events-auto"
+        >
+          <CountrySearch onLocate={(lat, lng) => setFlyToLocation({ lat, lng, ts: Date.now() })} />
+        </motion.div>
+      )}
+
+
+
       {/* ── NEW SIDEBAR (Root Level) ── */}
       {showLayers && !isMobile && <LayerPanel data={data} activeLayers={activeLayers} setActiveLayers={setActiveLayers} />}
 
       {/* ── RIGHT TOOL STRIP (desktop only — mobile uses bottom nav) ── */}
       {!isMobile && <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-[250] pointer-events-auto bg-black/40 backdrop-blur-sm p-1 rounded-full border border-white/5">
+        <div className="relative group">
+          <button onClick={() => setScreenshotTick(t => t + 1)} className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-white/10" title="CAPTURE SCREENSHOT">
+            <Camera className="w-4 h-4 text-white/60" />
+          </button>
+        </div>
+
         <div className="relative group">
           <button onClick={() => { setShowIntel(!showIntel); setShowMarkets(false); setShowAlerts(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showIntel ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`}>
             <Radar className={`w-4 h-4 ${showIntel ? 'text-[var(--cyan-primary)]' : 'text-white/60'}`} />
@@ -898,6 +933,28 @@ export default function Dashboard() {
           <button onClick={() => { setShowEntityGraph(!showEntityGraph); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showEntityGraph ? 'bg-[#D4AF37]/20' : 'hover:bg-white/10'}`}>
             <Network className={`w-4 h-4 ${showEntityGraph ? 'text-[#D4AF37]' : 'text-white/60'}`} />
           </button>
+        </div>
+
+        {/* Watchlist Button */}
+        <div className="relative">
+          <WatchlistPanel
+            data={data}
+            onLocate={(lat, lng) => setFlyToLocation({ lat, lng, ts: Date.now() })}
+            onMatch={(label) => {
+              // Flash notification effect handled inside panel
+            }}
+          />
+        </div>
+
+        {/* Intel Pins Button */}
+        <div className="relative">
+          <IntelPinsPanel
+            pins={pins}
+            setPins={setPins}
+            onLocate={(lat, lng) => setFlyToLocation({ lat, lng, ts: Date.now() })}
+            pendingPin={pendingPin}
+            clearPendingPin={() => setPendingPin(null)}
+          />
         </div>
       </div>}
 
@@ -1051,6 +1108,9 @@ export default function Dashboard() {
                   {mobilePanel === 'search' && (
                     <div className="space-y-2">
                       <SearchBar onLocate={(lat, lng) => { setFlyToLocation({ lat, lng, ts: Date.now() }); setMobilePanel(null); }} />
+                      <div className="mt-2">
+                        <CountrySearch onLocate={(lat, lng) => { setFlyToLocation({ lat, lng, ts: Date.now() }); setMobilePanel(null); }} />
+                      </div>
                       <SharePanel mapView={mapView} activeLayers={activeLayers} mouseCoords={null} />
                     </div>
                   )}
@@ -1073,10 +1133,28 @@ export default function Dashboard() {
             <div className="flex gap-2 items-center">
               <span>COORD</span>
               <span ref={coordsDisplayRef} className="text-[var(--gold-primary)] font-bold tabular-nums">—</span>
+              <button
+                onClick={() => {
+                  const c = mouseCoordsRef.current;
+                  const loc = document.querySelector('[data-loc-label]')?.textContent || '';
+                  if (c) {
+                    const text = `${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}${loc && loc !== 'HOVER MAP' ? ' - ' + loc : ''}`;
+                    navigator.clipboard.writeText(text).then(() => {
+                      const btn = document.getElementById('copy-toast');
+                      if (btn) { btn.textContent = 'COPIED'; setTimeout(() => { if(btn) btn.textContent = 'COPY'; }, 1500); }
+                    }).catch(() => {});
+                  }
+                }}
+                className="p-1 text-[var(--text-muted)] hover:text-[var(--cyan-primary)] transition-colors"
+                title="COPY COORDINATES"
+                id="copy-toast"
+              >
+                COPY
+              </button>
             </div>
             <div className="flex gap-2 items-center">
               <span>LOC</span>
-              <span className="text-[var(--cyan-primary)] truncate max-w-[200px]">{locationLabel || 'HOVER MAP'}</span>
+              <span className="text-[var(--cyan-primary)] truncate max-w-[200px]" data-loc-label>{locationLabel || 'HOVER MAP'}</span>
             </div>
             <div className="flex gap-2 items-center">
               <span>Z</span>
