@@ -10,11 +10,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: osiris
-    # Host port is configurable via OSIRIS_PORT in .env (defaults to 3000).
     ports:
       - "${OSIRIS_PORT:-3000}:3000"
-    # Optional API keys / scanner backend — copy .env.template to .env and
-    # fill in what you need. Missing file is ignored (keyless feeds still work).
     env_file:
       - path: .env
         required: false
@@ -23,12 +20,17 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0
+      - DATABASE_URL=postgres://osiris:osiris_pass@osiris-db:5432/osiris
+      - MINIO_ENDPOINT=http://osiris-minio:9000
+      - REDIS_URL=redis://osiris-redis:6379
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      osiris-db:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - default
-      - umami_default
 
   osiris-cache:
     image: nginx:alpine
@@ -55,66 +57,67 @@ services:
     networks:
       - default
 
+  # ═══════════════════════════════════════════════════════════════
+  # Phase 0 — Foundry Backbone: Durable Data Services
+  # ═══════════════════════════════════════════════════════════════
+  # Postgres 16 with pgvector (semantic search) and Apache AGE (graph)
+  osiris-db:
+    build:
+      context: ./osiris-foundation/db
+      dockerfile: Dockerfile
+    container_name: osiris-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=osiris
+      - POSTGRES_PASSWORD=osiris_pass
+      - POSTGRES_DB=osiris
+    volumes:
+      - osiris-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U osiris"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - default
+
+  # MinIO: S3-compatible object store for raw blobs (PDFs, images, audio)
+  osiris-minio:
+    image: minio/minio:latest
+    container_name: osiris-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=osiris
+      - MINIO_ROOT_PASSWORD=osiris_minio_pass
+    volumes:
+      - osiris-minio-data:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    networks:
+      - default
+
+  # Redis: Session cache, rate limiting, pub/sub
+  osiris-redis:
+    image: redis:7-alpine
+    container_name: osiris-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - osiris-redis-data:/data
+    restart: unless-stopped
+    networks:
+      - default
+
 volumes:
   nginx-cache:
+  osiris-pgdata:
+  osiris-minio-data:
+  osiris-redis-data:
 
 networks:
   umami_default:
     external: true
-
-# ── CasaOS app-store metadata (ignored by plain Docker Compose) ──
-x-casaos:
-  architectures:
-    - amd64
-    - arm64
-  main: osiris
-  author: simplifaisoul
-  developer: simplifaisoul
-  category: Network
-  description:
-    en_us: >-
-      OSIRIS is a production-grade open-source OSINT situational-awareness
-      dashboard. It aggregates real-time global intelligence across aviation,
-      maritime, CCTV networks, seismic activity, wildfires, news feeds,
-      weather, space weather, cyber threats (CVEs) and conflict zones into a
-      single GPU-accelerated MapLibre interface. Most features work with no
-      API keys.
-  tagline:
-    en_us: Real-time global OSINT intelligence dashboard
-  title:
-    en_us: OSIRIS
-  icon: https://raw.githubusercontent.com/Aiacos/osiris/master/public/casaos-icon.png
-  thumbnail: https://raw.githubusercontent.com/Aiacos/osiris/master/public/og-image.png
-  screenshot_link:
-    - https://raw.githubusercontent.com/Aiacos/osiris/master/public/og-image.png
-  scheme: http
-  hostname: ""
-  port_map: "3000"
-  index: /
-  webui_port: 3000
-  envs:
-    - container: SCANNER_URL
-      description:
-        en_us: "(Optional) RECON scanner backend URL, e.g. http://scanner:7700"
-    - container: SCANNER_KEY
-      description:
-        en_us: "(Optional) RECON scanner shared secret (must match backend OSIRIS_KEY)."
-    - container: FIRMS_API_KEY
-      description:
-        en_us: "(Optional) NASA FIRMS API key for active-fire data."
-    - container: AIS_API_KEY
-      description:
-        en_us: "(Optional) aisstream.io key for maritime vessel tracking."
-    - container: OPENSKY_CLIENT_ID
-      description:
-        en_us: "(Optional) OpenSky OAuth2 client id for higher aircraft rate limits."
-    - container: OPENSKY_CLIENT_SECRET
-      description:
-        en_us: "(Optional) OpenSky OAuth2 client secret."
-    - container: N2YO_API_KEY
-      description:
-        en_us: "(Optional) N2YO key for satellite tracking."
-  ports:
-    - container: "3000"
-      description:
-        en_us: "Web UI (HTTP)."
