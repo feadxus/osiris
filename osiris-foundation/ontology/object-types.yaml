@@ -1,0 +1,148 @@
+# ═══════════════════════════════════════════════════════════════
+#  OSIRIS Ontology — Object Types
+#  Consolidates your existing 9 personal-ontology domains and the
+#  Polybolos multi-domain entity model into one declarative schema.
+# ═══════════════════════════════════════════════════════════════
+
+object_types:
+
+  # ── PERSON domain ────────────────────────────────────────────
+  person:
+    domain: PERSON
+    display_name: "Person"
+    icon: "user"
+    color: "#D4AF37"
+    properties:
+      full_name:  { type: string, required: true, searchable: true, embed: true }
+      aliases:    { type: "string[]", searchable: true }
+      dob:        { type: date, pii: true }
+      nationality: { type: string }
+      notes:      { type: string, embed: true }
+      risk_score: { type: number, min: 0, max: 100 }
+
+  organization:
+    domain: PERSON
+    display_name: "Organization"
+    icon: "building-2"
+    color: "#C9A227"
+    properties:
+      name:        { type: string, required: true, searchable: true, embed: true }
+      reg_number:  { type: string, searchable: true }
+      country:     { type: string }
+      sanctioned:  { type: boolean }   # cross-checked against Yente / OFAC SDN
+
+  # ── COMMUNICATION domain ─────────────────────────────────────
+  phone_number:
+    domain: COMMUNICATION
+    display_name: "Phone Number"
+    icon: "phone"
+    color: "#4F6FFF"
+    properties:
+      e164:    { type: string, required: true, searchable: true, pii: true }
+      carrier: { type: string }
+      region:  { type: string }
+
+  email_address:
+    domain: COMMUNICATION
+    display_name: "Email"
+    icon: "mail"
+    color: "#4F6FFF"
+    properties:
+      address:    { type: string, required: true, searchable: true, pii: true }
+      breached_in: { type: "string[]" }   # from leak lookups
+
+  # ── SOCIAL / IDENTITY ────────────────────────────────────────
+  social_profile:
+    domain: SOCIAL
+    display_name: "Social Profile"
+    icon: "at-sign"
+    color: "#8A63D2"
+    properties:
+      platform: { type: string, required: true }
+      handle:   { type: string, required: true, searchable: true }
+      url:      { type: string }
+
+  identity_document:
+    domain: IDENTITY
+    display_name: "Identity Document"
+    icon: "id-card"
+    color: "#E8743B"
+    properties:
+      doc_type: { type: enum, values: [passport, national_id, drivers_license], required: true }
+      number:   { type: string, required: true, searchable: true, pii: true }
+      country:  { type: string }
+
+  # ── VEHICLE / TRACK domain ───────────────────────────────────
+  vehicle:
+    domain: LAND
+    display_name: "Vehicle"
+    icon: "car"
+    color: "#3BA776"
+    properties:
+      plate: { type: string, searchable: true }
+      vin:   { type: string, searchable: true }
+      make:  { type: string }
+      model: { type: string }
+
+  vessel:
+    domain: SEA
+    display_name: "Vessel"
+    icon: "ship"
+    color: "#2E8BC0"
+    properties:
+      name: { type: string, searchable: true, embed: true }
+      imo:  { type: string, searchable: true }
+      mmsi: { type: string, searchable: true }
+      flag: { type: string }
+
+  aircraft:
+    domain: AIR
+    display_name: "Aircraft"
+    icon: "plane"
+    color: "#5BC0EB"
+    properties:
+      callsign: { type: string, searchable: true }
+      icao24:   { type: string, searchable: true }
+      registration: { type: string, searchable: true }
+
+  # ── LOCATION / NETWORK / EVENT / MEDIA ───────────────────────
+  place:
+    domain: LOCATION
+    display_name: "Place"
+    icon: "map-pin"
+    color: "#E84855"
+    properties:
+      label:   { type: string, required: true, searchable: true, embed: true }
+      geo:     { type: geo, required: true }
+      address: { type: string, searchable: true }
+
+  network_node:
+    domain: CYBER
+    display_name: "Network Node"
+    icon: "network"
+    color: "#00C2A8"
+    properties:
+      kind:   { type: enum, values: [ip, domain, mac, wifi_ssid, asn] }
+      value:  { type: string, required: true, searchable: true }
+      threat: { type: number, min: 0, max: 100 }
+
+  event:
+    domain: EVENT
+    display_name: "Event"
+    icon: "calendar-clock"
+    color: "#F2A65A"
+    properties:
+      label:    { type: string, required: true, searchable: true, embed: true }
+      geo:      { type: geo }
+      severity: { type: enum, values: [INFO, WATCH, ALERT, CRITICAL] }
+
+  media:
+    domain: MEDIA
+    display_name: "Media"
+    icon: "image"
+    color: "#9B9B9B"
+    properties:
+      kind:        { type: enum, values: [image, document, audio, video] }
+      uri:         { type: string, required: true }   # minio:// reference
+      transcript:  { type: string, embed: true }       # OCR/ASR output
+      caption:     { type: string, searchable: true, embed: true }

@@ -1,0 +1,42 @@
+# ═══════════════════════════════════════════════════════════════
+#  OSIRIS Ontology — Meta Schema
+#  This file documents the FORMAT. The loader (Phase 1) reads every
+#  *.yaml in this folder and upserts into ontology.object_types /
+#  ontology.link_types. Add a new object type by editing YAML and
+#  reloading — no code change, no rebuild. This is the core of the
+#  "Gotham ontology as data" model.
+# ═══════════════════════════════════════════════════════════════
+
+# An OBJECT TYPE describes a kind of thing in the world:
+#
+#   <name>:                      # snake_case, must match ontology.entities.object_type
+#     domain:  PERSON            # high-level grouping (PERSON, SEA, AIR, CYBER, ...)
+#     display_name: "Person"
+#     icon:    "user"            # lucide-react icon name
+#     color:   "#D4AF37"
+#     properties:                # typed property definitions
+#       full_name:   { type: string,  required: true,  searchable: true }
+#       dob:         { type: date }
+#       risk_score:  { type: number,  min: 0, max: 100 }
+#       aliases:     { type: string[], searchable: true }
+#
+# Property types: string | string[] | number | date | datetime | boolean
+#                 | geo (lat/lng) | enum (with `values:`) | ref (link to another entity)
+# Flags: required, searchable (push to Meilisearch), pii (mask + audit on read),
+#        embed (include this field's text in the semantic index).
+
+# A LINK TYPE describes how two objects relate:
+#
+#   <name>:
+#     display_name: "Owns"
+#     directed: true
+#     source_types: [person, organization]   # allowed object types on each side
+#     target_types: [vehicle, vessel, aircraft]
+
+# An ACTION is a governed write-back to the ontology (audited):
+#
+#   <name>:
+#     display_name: "Merge entities"
+#     effect: merge | create | update | link | flag | export
+#     requires_role: analyst            # min role to execute
+#     audited: true                     # always true for writes

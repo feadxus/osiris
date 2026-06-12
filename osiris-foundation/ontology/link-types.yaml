@@ -1,0 +1,94 @@
+# ═══════════════════════════════════════════════════════════════
+#  OSIRIS Ontology — Link Types & Actions
+# ═══════════════════════════════════════════════════════════════
+
+link_types:
+
+  owns:
+    display_name: "Owns"
+    directed: true
+    source_types: [person, organization]
+    target_types: [vehicle, vessel, aircraft, network_node]
+
+  registered_to:
+    display_name: "Registered To"
+    directed: true
+    source_types: [phone_number, email_address, vehicle, identity_document, network_node]
+    target_types: [person, organization]
+
+  communicated_with:
+    display_name: "Communicated With"
+    directed: false
+    source_types: [person, phone_number, email_address, social_profile]
+    target_types: [person, phone_number, email_address, social_profile]
+
+  located_at:
+    display_name: "Located At"
+    directed: true
+    source_types: [person, vehicle, vessel, aircraft, event, network_node]
+    target_types: [place]
+
+  sighted_at:
+    display_name: "Sighted At"
+    directed: true
+    source_types: [person, vehicle, vessel]
+    target_types: [place, event]
+
+  member_of:
+    display_name: "Member Of"
+    directed: true
+    source_types: [person]
+    target_types: [organization]
+
+  mentioned_in:
+    display_name: "Mentioned In"
+    directed: true
+    source_types: [person, organization, place, vehicle, vessel, aircraft, network_node]
+    target_types: [media, event]
+
+  same_as:
+    display_name: "Same As (resolved duplicate)"
+    directed: false
+    source_types: ["*"]
+    target_types: ["*"]
+
+
+# ── Governed write-back actions (every one is audited) ──────────
+actions:
+
+  create_entity:
+    display_name: "Create Entity"
+    effect: create
+    requires_role: analyst
+    audited: true
+
+  link_entities:
+    display_name: "Link Entities"
+    effect: link
+    requires_role: analyst
+    audited: true
+
+  merge_entities:
+    display_name: "Merge Duplicates"
+    effect: merge
+    requires_role: analyst
+    audited: true
+    # writes a `same_as` link, repoints relationships, keeps both source rows
+
+  flag_threat:
+    display_name: "Flag as Threat"
+    effect: flag
+    requires_role: analyst
+    audited: true
+
+  add_to_case:
+    display_name: "Add to Investigation"
+    effect: update
+    requires_role: viewer
+    audited: true
+
+  export_case:
+    display_name: "Export Investigation"
+    effect: export
+    requires_role: admin     # exports leave the system — highest bar
+    audited: true
