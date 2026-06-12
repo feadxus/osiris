@@ -10,7 +10,7 @@ interface OsirisMapProps {
   onEntityClick?: (entity: any) => void;
   onMouseCoords?: (coords: { lat: number; lng: number }) => void;
   onRightClick?: (coords: { lat: number; lng: number }) => void;
-  onViewStateChange?: (vs: { zoom: number; latitude: number }) => void;
+  onViewStateChange?: (vs: { zoom: number; latitude: number; longitude: number }) => void;
   flyToLocation?: { lat: number; lng: number; ts: number } | null;
   projection?: 'mercator' | 'globe';
   mapStyle?: string;
@@ -181,7 +181,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       createDot(map, 'dot-fire', isGhost ? phantomPurple : '#E65100', 10);
       createDot(map, 'dot-cctv', cameraColor, 10);
 
-      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections', 'scan-targets', 'sdk-entities', 'sdk-links', 'malware-nodes', 'network-mesh'];
+      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections', 'scan-targets', 'sdk-entities', 'sdk-links', 'malware-nodes', 'network-mesh', 'water-ambient'];
       sources.forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY_FC }));
 
       // Warning icon generator (parameterized — eliminates 3x copy-paste)
@@ -561,6 +561,25 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         'text-offset': [0, 1.2], 'text-allow-overlap': false,
       }, paint: { 'text-color': ['match', ['get','type'], 'military','#D32F2F', 'tanker','#E65100', 'cargo','#26C6DA', '#B0BEC5'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
+      // ── Ambient Water Quality (ENVIRONMENT) ──
+      map.addLayer({ id: 'water-ambient-glow', type: 'circle', source: 'water-ambient', paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 6, 5, 14, 10, 22],
+        'circle-color': ['get', 'color'],
+        'circle-opacity': 0.12,
+        'circle-blur': 1,
+      }});
+      map.addLayer({ id: 'water-ambient-dots', type: 'circle', source: 'water-ambient', paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 2.5, 5, 4.5, 10, 7],
+        'circle-color': ['get', 'color'],
+        'circle-opacity': 0.85,
+        'circle-stroke-width': 0.5,
+        'circle-stroke-color': '#00121a',
+      }});
+      map.addLayer({ id: 'water-ambient-label', type: 'symbol', source: 'water-ambient', minzoom: 6, layout: {
+        'text-field': ['get', 'name'], 'text-size': 9, 'text-font': ['Open Sans Regular'],
+        'text-offset': [0, 1.2], 'text-allow-overlap': false,
+      }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
+
       setMapReady(true);
     });
 
@@ -574,7 +593,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       }
     });
     map.on('contextmenu', e => { e.preventDefault(); onRightClick?.({ lat: e.lngLat.lat, lng: e.lngLat.lng }); });
-    map.on('moveend', () => { const c = map.getCenter(); onViewStateChange?.({ zoom: map.getZoom(), latitude: c.lat }); });
+    map.on('moveend', () => { const c = map.getCenter(); onViewStateChange?.({ zoom: map.getZoom(), latitude: c.lat, longitude: c.lng }); });
 
     // ── POPUP HELPER ──
     const popup = (coords: any, html: string) => {
@@ -583,6 +602,18 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     };
     const pStyle = `background:rgba(12,14,26,0.95);backdrop-filter:blur(16px);border-radius:10px;padding:16px;font-family:'JetBrains Mono',monospace;`;
     const linkStyle = `display:inline-block;margin-top:8px;padding:5px 12px;font-size:10px;letter-spacing:0.12em;text-decoration:none;border-radius:5px;font-family:'JetBrains Mono',monospace;`;
+    const esc = (v: any) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c] as string));
+    const relTime = (raw: any): string => {
+      if (!raw) return '';
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return String(raw);
+      const mins = Math.round((Date.now() - d.getTime()) / 60000);
+      if (mins < 1) return 'updated just now';
+      if (mins < 60) return `updated ${mins} min ago`;
+      const hrs = Math.round(mins / 60);
+      if (hrs < 24) return `updated ${hrs}h ago`;
+      return `updated ${Math.round(hrs / 24)}d ago`;
+    };
 
     // ── Flights (with FlightAware + ADS-B Exchange links) ──
     ['fl-commercial','fl-private','fl-jets','fl-military'].forEach(layer => {
@@ -614,6 +645,88 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       });
       map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
+    });
+
+    // ── Ambient water station popup (USGS) ──
+    map.on('click', 'water-ambient-dots', e => {
+      if (!e.features?.length) return;
+      const p = e.features[0].properties as any;
+      const coords = (e.features[0].geometry as any).coordinates;
+      let params: Record<string, any> = {};
+      try { params = p.params ? (typeof p.params === 'string' ? JSON.parse(p.params) : p.params) : {}; } catch { params = {}; }
+      const rows = Object.entries(params)
+        .filter(([, v]) => v !== undefined && v !== null && v !== '')
+        .map(([k, v]) => `<div><span style="color:#5C5A54;font-size:9px;">${esc(k).toUpperCase()}</span><br/><span style="color:#E8E6E0;">${esc(v)}</span></div>`)
+        .join('');
+      const updatedStr = relTime(p.lastUpdated);
+      const safeUrl = typeof p.url === 'string' && p.url.startsWith('https://') ? p.url : null;
+
+      popup(coords, `<div style="${pStyle}border:1px solid ${p.color}55;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px;">
+          <span style="color:${p.color};font-size:14px;font-weight:700;">${esc(p.name) || 'Station'}</span>
+          <span style="color:${p.color};font-size:10px;border:1px solid ${p.color}55;border-radius:4px;padding:2px 6px;white-space:nowrap;">${esc(p.status) || ''}</span>
+        </div>
+        <div style="color:#9A988F;font-size:10px;margin-bottom:8px;">${esc(p.reason) || ''}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px;">${rows}</div>
+        ${updatedStr ? `<div style="color:#5C5A54;font-size:9px;margin-top:6px;">${esc(updatedStr)}</div>` : ''}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${safeUrl ? `<a href="${safeUrl}" target="_blank" style="${linkStyle}color:${p.color};border:1px solid ${p.color}55;background:${p.color}1a;">VIEW SOURCE →</a>` : ''}
+        </div>
+        <div id="wq-spark" style="margin-top:8px;min-height:0;"></div>
+      </div>`);
+
+      // 7-day USGS sparkline
+      if (typeof p.id === 'string' && p.id.startsWith('usgs-')) {
+        const siteId = p.id.slice(5);
+        const sparkColor = p.color || '#00E5FF';
+        (async () => {
+          try {
+            const res = await fetch(
+              `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${encodeURIComponent(siteId)}&period=P7D&parameterCd=00300,00400,63680,99133`,
+              { signal: AbortSignal.timeout(8000) }
+            );
+            if (!res.ok) return;
+            const json = await res.json();
+            const series: any[] = json?.value?.timeSeries ?? [];
+            // Prefer 00300 (DO), then 00400 (pH), then 63680 (turbidity), then 99133 (nitrate)
+            const preferred = ['00300','00400','63680','99133'];
+            let chosen: any = null;
+            for (const cd of preferred) {
+              chosen = series.find((ts: any) => ts.variable?.variableCode?.[0]?.value === cd);
+              if (chosen) break;
+            }
+            if (!chosen) chosen = series[0];
+            if (!chosen) return;
+            const rawVals: {value: string; dateTime: string}[] = chosen.values?.[0]?.value ?? [];
+            const pts = rawVals
+              .map((v: any) => ({ t: new Date(v.dateTime).getTime(), y: parseFloat(v.value) }))
+              .filter(v => isFinite(v.t) && isFinite(v.y) && v.y !== -999999);
+            if (pts.length < 2) return;
+            // Guard: popup may have been closed/replaced
+            const sparkEl = document.getElementById('wq-spark');
+            if (!sparkEl) return;
+            const unitCode = chosen.variable?.unit?.unitCode ?? '';
+            const varName = chosen.variable?.variableName ?? 'Reading';
+            const label = `7-day ${varName}${unitCode ? ' (' + unitCode + ')' : ''}`;
+            const W = 220, H = 40, PAD = 2;
+            const minY = Math.min(...pts.map(v => v.y));
+            const maxY = Math.max(...pts.map(v => v.y));
+            const rangeY = maxY - minY || 1;
+            const minT = pts[0].t, maxT = pts[pts.length - 1].t;
+            const rangeT = maxT - minT || 1;
+            const toX = (t: number) => PAD + ((t - minT) / rangeT) * (W - PAD * 2);
+            const toY = (y: number) => (H - PAD) - ((y - minY) / rangeY) * (H - PAD * 2);
+            const d = pts.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(v.t).toFixed(1)},${toY(v.y).toFixed(1)}`).join(' ');
+            sparkEl.innerHTML = `
+              <div style="font-size:8px;color:#5C5A54;margin-bottom:2px;">${esc(label)}</div>
+              <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;overflow:visible;">
+                <path d="${d}" fill="none" stroke="${sparkColor}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+              </svg>`;
+          } catch {
+            // fetch failed or aborted — do nothing
+          }
+        })();
+      }
     });
 
     // ── CCTV (opens CameraViewer panel) ──
@@ -792,7 +905,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     });
 
     // ── Generic hover for clickables ──
-    ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','balloon-dots','rad-dots','ship-dots','sweep-device-dots','scan-targets-dots','sdk-sea','sdk-sea-glow','sdk-sea-atmo','sdk-air','sdk-air-glow','sdk-air-atmo','sdk-intel','sdk-intel-glow','sdk-intel-atmo','malware-dots'].forEach(layer => {
+    ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','balloon-dots','rad-dots','ship-dots','sweep-device-dots','scan-targets-dots','sdk-sea','sdk-sea-glow','sdk-sea-atmo','sdk-air','sdk-air-glow','sdk-air-atmo','sdk-intel','sdk-intel-glow','sdk-intel-atmo','malware-dots','water-ambient-dots'].forEach(layer => {
       map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
     });
@@ -1115,6 +1228,22 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     setGeo('earthquakes', activeLayers.earthquakes && data.earthquakes ? data.earthquakes.map((eq: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [eq.lng, eq.lat] }, properties: { magnitude: eq.magnitude, place: eq.place } })) : []);
   }, [mapReady, data.earthquakes, activeLayers.earthquakes, setGeo]);
 
+  // ── Ambient water station sync (USGS) ──
+  useEffect(() => {
+    if (!mapReady) return;
+    const toFeatures = (arr: any[], on: boolean) =>
+      on && Array.isArray(arr)
+        ? arr
+            .filter((s: any) => Number.isFinite(s.lat) && Number.isFinite(s.lng))
+            .map((s: any) => ({
+              type: 'Feature' as const,
+              geometry: { type: 'Point' as const, coordinates: [s.lng, s.lat] },
+              properties: { name: s.name, color: s.color, status: s.status, reason: s.reason, source: s.source, url: s.url, params: s.params, id: s.id, lastUpdated: s.lastUpdated },
+            }))
+        : [];
+    setGeo('water-ambient', toFeatures(data.water_ambient, activeLayers.water_ambient));
+  }, [mapReady, data.water_ambient, activeLayers.water_ambient, setGeo]);
+
   useEffect(() => {
     if (!mapReady) return;
     setGeo('satellites', activeLayers.satellites && data.satellites ? data.satellites.map((s: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] }, properties: { name: s.name, color: s.color, mission: s.mission, alt: s.alt, noradId: s.noradId } })) : []);
@@ -1300,6 +1429,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     setVis(['fl-military'], activeLayers.military);
     setVis(['cctv-glow','cctv-dots','cctv-label'], activeLayers.cctv);
     setVis(['fires-heat'], activeLayers.fires);
+    setVis(['water-ambient-glow', 'water-ambient-dots', 'water-ambient-label'], activeLayers.water_ambient);
     setVis(['weather-glow','weather-dots','weather-label'], activeLayers.weather);
     setVis(['infra-glow','infra-dots','infra-label'], activeLayers.infrastructure);
     setVis(['maritime-glow','maritime-dots','maritime-label'], activeLayers.maritime);

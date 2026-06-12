@@ -78,6 +78,14 @@ const getLayerGroups = (theme: 'core' | 'ghost') => {
     ],
   },
   {
+    label: 'ENVIRON',
+    fullLabel: 'ENVIRONMENT',
+    color: '#29B6F6',
+    layers: [
+      { key: 'water_ambient', label: 'Ambient Water', icon: Droplet, color: '#29B6F6', dataKey: 'water_ambient' },
+    ],
+  },
+  {
     label: 'THREAT',
     fullLabel: 'THREATS & INFRA',
     color: '#D32F2F',
@@ -107,11 +115,33 @@ const getLayerGroups = (theme: 'core' | 'ghost') => {
   ];
 };
 
+// Color legend for the ENVIRONMENT group (ambient water status)
+const ENV_LEGEND: { section: string; entries: { label: string; color: string }[] }[] = [
+  {
+    section: 'Water status',
+    entries: [
+      { label: 'Good',     color: '#00E676' },
+      { label: 'Moderate', color: '#FFD700' },
+      { label: 'Poor',     color: '#FF1744' },
+      { label: 'Unknown',  color: '#607D8B' },
+    ],
+  },
+];
+
 // SVG component for Shield which was missing in the imports above
 function Shield(props: any) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+  );
+}
+
+// Inline Droplet icon (avoids depending on a specific lucide-react export)
+function Droplet(props: any) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 2.5 6.5 9a7.5 7.5 0 1 0 11 0z"/>
     </svg>
   );
 }
@@ -187,6 +217,30 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
                 );
               })}
             </div>
+            {group.label === 'ENVIRON' && (
+              <div className="mt-1 pt-2 border-t border-white/10">
+                {ENV_LEGEND.map((sec) => (
+                  <div key={sec.section} className="mb-1.5">
+                    <div className="text-[8px] font-mono tracking-widest text-white/30 uppercase mb-1">
+                      {sec.section}
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      {sec.entries.map((e) => (
+                        <div key={e.label} className="flex items-center gap-1">
+                          <div
+                            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: e.color }}
+                          />
+                          <span className="text-[8px] font-mono text-white/40 uppercase tracking-wide">
+                            {e.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
 
@@ -316,6 +370,30 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
                         );
                       })}
                     </div>
+                    {group.label === 'ENVIRON' && (
+                      <div className="mt-3 pt-2 border-t border-white/10">
+                        {ENV_LEGEND.map((sec) => (
+                          <div key={sec.section} className="mb-2">
+                            <div className="text-[8px] font-mono tracking-widest text-white/30 uppercase mb-1">
+                              {sec.section}
+                            </div>
+                            <div className="flex flex-wrap gap-x-3 gap-y-1">
+                              {sec.entries.map((e) => (
+                                <div key={e.label} className="flex items-center gap-1">
+                                  <div
+                                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: e.color }}
+                                  />
+                                  <span className="text-[8px] font-mono text-white/40 uppercase tracking-wide">
+                                    {e.label}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

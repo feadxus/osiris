@@ -153,6 +153,7 @@ export default function Dashboard() {
     sdk_naval: true,
     
     malware: false,
+    water_ambient: false,
   });
   const [liveFeedUrl, setLiveFeedUrl] = useState<string | null>(null);
   const [liveFeedName, setLiveFeedName] = useState('');
@@ -437,6 +438,11 @@ export default function Dashboard() {
       layerFetchedRef.current.add('malware');
     }
 
+    // Ambient water (USGS NWIS live sensors)
+    if (activeLayers.water_ambient && !layerFetchedRef.current.has('water_ambient')) {
+      fetchEndpoint('/api/water-quality', d => ({ water_ambient: d.stations }));
+      layerFetchedRef.current.add('water_ambient');
+    }
 
   }, [activeLayers]);
 
@@ -455,6 +461,9 @@ export default function Dashboard() {
     }
     if (activeLayers.maritime) {
       intervals.push(setInterval(() => fetchEndpoint('/api/maritime', d => ({ maritime_ports: d.ports, maritime_chokepoints: d.chokepoints, maritime_ships: d.ships })), 10000)); // 10s
+    }
+    if (activeLayers.water_ambient) {
+      intervals.push(setInterval(() => fetchEndpoint('/api/water-quality', d => ({ water_ambient: d.stations })), 900000)); // 15 min
     }
     return () => intervals.forEach(clearInterval);
   }, [activeLayers, fetchEndpoint]);
