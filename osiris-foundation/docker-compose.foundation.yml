@@ -1,0 +1,109 @@
+# ═══════════════════════════════════════════════════════════════
+#  OSIRIS — Foundry Backbone (Phase 0)
+#  The persistence layer that turns OSIRIS from a dashboard into a
+#  Palantir-style platform. Merge these services into your existing
+#  docker-compose.yml (osiris / osiris-cache / osiris-intel).
+#
+#  Bring up:   docker compose -f docker-compose.foundation.yml up -d
+#  Everything is keyless and self-hosted. No external SaaS.
+# ═══════════════════════════════════════════════════════════════
+name: osiris-foundation
+
+services:
+  # ── Relational + Vector + Graph, in ONE Postgres ──────────────
+  db:
+    build:
+      context: ./db
+    image: osiris/foundry-db:pg16-age-pgvector
+    container_name: osiris-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: osiris
+      POSTGRES_USER: osiris
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_env}
+    volumes:
+      - osiris_pgdata:/var/lib/postgresql/data
+      # init/*.sql run in alphabetical order on first boot only
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U osiris -d osiris"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Raw blob storage (the actual PDFs, images, audio, etc.) ───
+  minio:
+    image: minio/minio:latest
+    container_name: osiris-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER:-osiris}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-change_me_in_env}
+    volumes:
+      - osiris_minio:/data
+    ports:
+      - "${MINIO_PORT:-9000}:9000"     # S3 API
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"  # Web console
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Full-text search (typo-tolerant, fast) ────────────────────
+  search:
+    image: getmeili/meilisearch:v1.10
+    container_name: osiris-search
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-change_me_in_env}
+      MEILI_ENV: production
+    volumes:
+      - osiris_meili:/meili_data
+    ports:
+      - "${MEILI_PORT:-7700}:7700"
+
+  # ── Queue / cache for the ingestion pipeline (Phase 2) ────────
+  redis:
+    image: redis:7-alpine
+    container_name: osiris-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+      - osiris_redis:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  # ── (Already in your plan) Self-hosted OpenSanctions API ──────
+  yente:
+    image: ghcr.io/opensanctions/yente:latest
+    container_name: osiris-yente
+    restart: unless-stopped
+    environment:
+      YENTE_INDEX_TYPE: elasticsearch
+      YENTE_INDEX_URL: http://yente-index:9200
+    depends_on:
+      - yente-index
+    ports:
+      - "${YENTE_PORT:-8000}:8000"
+
+  yente-index:
+    image: elasticsearch:8.15.0
+    container_name: osiris-yente-index
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - osiris_yente:/usr/share/elasticsearch/data
+
+volumes:
+  osiris_pgdata:
+  osiris_minio:
+  osiris_meili:
+  osiris_redis:
+  osiris_yente:
