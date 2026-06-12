@@ -16,6 +16,19 @@ const PORTS = [
   { name: 'Busan', country: 'KR', lat: 35.10, lng: 129.04, type: 'container', volume: '22.7M TEU', rank: 6 },
   { name: 'Qingdao', country: 'CN', lat: 36.07, lng: 120.38, type: 'container', volume: '22.0M TEU', rank: 7 },
   { name: 'Rotterdam', country: 'NL', lat: 51.90, lng: 4.50, type: 'container', volume: '14.5M TEU', rank: 8 },
+  { name: 'Tokyo', country: 'JP', lat: 35.61, lng: 139.79, type: 'container', volume: '4.5M TEU' },
+  { name: 'Yokohama', country: 'JP', lat: 35.45, lng: 139.66, type: 'container', volume: '2.9M TEU' },
+  { name: 'Kobe', country: 'JP', lat: 34.67, lng: 135.21, type: 'container', volume: '2.8M TEU' },
+  { name: 'Nagoya', country: 'JP', lat: 35.08, lng: 136.87, type: 'container', volume: '2.6M TEU' },
+  { name: 'Osaka', country: 'JP', lat: 34.63, lng: 135.41, type: 'container', volume: '2.1M TEU' },
+  { name: 'Hakata (Fukuoka)', country: 'JP', lat: 33.60, lng: 130.40, type: 'container', volume: '0.9M TEU' },
+  { name: 'Kitakyushu', country: 'JP', lat: 33.91, lng: 130.93, type: 'container', volume: '0.5M TEU' },
+  { name: 'Shimizu', country: 'JP', lat: 35.00, lng: 138.50, type: 'container', volume: '0.5M TEU' },
+  { name: 'Tomakomai', country: 'JP', lat: 42.63, lng: 141.63, type: 'container', volume: '0.4M TEU' },
+  { name: 'Niigata', country: 'JP', lat: 37.95, lng: 139.06, type: 'container', volume: '0.2M TEU' },
+  { name: 'Sendai', country: 'JP', lat: 38.27, lng: 141.02, type: 'container', volume: '0.2M TEU' },
+  { name: 'Mizushima', country: 'JP', lat: 34.50, lng: 133.72, type: 'energy', volume: 'Industrial' },
+  { name: 'Yokkaichi', country: 'JP', lat: 34.95, lng: 136.65, type: 'energy', volume: 'Industrial' },
   { name: 'Dubai (Jebel Ali)', country: 'AE', lat: 25.01, lng: 55.06, type: 'container', volume: '14.0M TEU', rank: 9 },
   { name: 'Port Klang', country: 'MY', lat: 2.99, lng: 101.39, type: 'container', volume: '13.2M TEU', rank: 10 },
   { name: 'Antwerp', country: 'BE', lat: 51.30, lng: 4.40, type: 'container', volume: '12.0M TEU', rank: 11 },
@@ -101,37 +114,82 @@ function connectAisStream() {
     globalForAis.isAisConnecting = false;
     const subscriptionMessage = {
       APIKey: apiKey,
-      // Global bounding box to catch major movement
-      BoundingBoxes: [[[-90, -180], [90, 180]]],
-      FilterMessageTypes: ["PositionReport"]
+      // Target specific high-value SCM areas to ensure data delivery on free tier
+      BoundingBoxes: [
+        // Tokyo Bay
+        [[34.8, 139.5], [35.7, 140.2]],
+        // Hormuz
+        [[25.0, 54.0], [27.5, 57.5]],
+        // Suez Canal
+        [[27.0, 32.0], [32.0, 33.5]],
+        // Bab el-Mandeb
+        [[12.0, 42.5], [14.0, 44.0]],
+        // Panama Canal
+        [[8.0, -80.5], [10.0, -79.0]],
+        // Malacca / Singapore
+        [[1.0, 103.0], [3.0, 104.5]],
+        // Taiwan Strait
+        [[22.0, 118.0], [26.0, 121.0]],
+        // Rotterdam / English Channel
+        [[50.0, 0.0], [53.0, 5.0]],
+        // US West Coast (LA/LB)
+        [[33.0, -119.0], [34.5, -117.0]],
+        // Global fallback (often heavily sampled by aisstream)
+        [[-90, -180], [90, 180]]
+      ],
+      FilterMessageTypes: ["PositionReport", "ShipStaticData"]
     };
     ws.send(JSON.stringify(subscriptionMessage));
   });
 
+  // Map AIS ship types to OSIRIS categories
+  const getOsirisShipType = (typeCode: number) => {
+    if (!typeCode) return 'cargo';
+    if (typeCode >= 80 && typeCode <= 89) return 'tanker';
+    if (typeCode >= 70 && typeCode <= 79) return 'cargo';
+    if (typeCode === 35) return 'military';
+    return 'cargo';
+  };
+
   ws.on("message", (data) => {
     try {
       const parsed = JSON.parse(data.toString());
+      const mmsi = parsed.MetaData?.MMSI;
+      if (!mmsi) return;
+
+      const existing = shipsCache.get(mmsi) || {
+        id: mmsi, mmsi: mmsi, timestamp: Date.now()
+      };
+
+      // Extract Name from MetaData if available (present in most messages)
+      if (parsed.MetaData?.ShipName) {
+        existing.name = parsed.MetaData.ShipName.trim();
+      }
+
       if (parsed.MessageType === "PositionReport" && parsed.Message?.PositionReport) {
         const report = parsed.Message.PositionReport;
-        const mmsi = parsed.MetaData?.MMSI || report.UserID;
-        
-        if (!mmsi) return;
+        existing.lat = report.Latitude;
+        existing.lng = report.Longitude;
+        existing.speed = report.Sog;
+        existing.heading = report.TrueHeading || report.Cog;
+        existing.timestamp = Date.now();
+      } 
+      else if (parsed.MessageType === "ShipStaticData" && parsed.Message?.ShipStaticData) {
+        const staticData = parsed.Message.ShipStaticData;
+        existing.name = staticData.Name ? staticData.Name.trim() : existing.name;
+        existing.destination = staticData.Destination ? staticData.Destination.trim() : existing.destination;
+        existing.type = getOsirisShipType(staticData.Type);
+      }
 
-        shipsCache.set(mmsi, {
-          id: mmsi,
-          mmsi: mmsi,
-          lat: report.Latitude,
-          lng: report.Longitude,
-          speed: report.Sog,
-          heading: report.TrueHeading || report.Cog,
-          timestamp: Date.now()
-        });
+      // Only store if we have coordinates
+      if (existing.lat && existing.lng) {
+        shipsCache.set(mmsi, existing);
+      }
 
-        // Limit cache size to prevent memory leak (latest 5000 ships)
-        if (shipsCache.size > 5000) {
-          const firstKey = shipsCache.keys().next().value;
-          if (firstKey) shipsCache.delete(firstKey);
-        }
+      // Limit cache size to prevent memory leak (allow up to 20,000 ships)
+      if (shipsCache.size > 20000) {
+        const firstKey = shipsCache.keys().next().value;
+        if (firstKey) shipsCache.delete(firstKey);
       }
     } catch (e) {
       // ignore parse errors
@@ -151,7 +209,16 @@ function connectAisStream() {
 // Start connection process asynchronously
 connectAisStream();
 
+// --- SCM Integration: VesselAPI Hybrid Fallback (Satellite AIS) ---
+let lastVesselApiFetch = 0;
+async function fetchVesselApiFallback() {
+  // Mock data removed per user request. We only rely on real live stream data.
+}
+
 export async function GET() {
+  // Trigger Hybrid Fallback
+  await fetchVesselApiFallback();
+
   // Clean up stale ships (older than 10 minutes)
   const now = Date.now();
   for (const [mmsi, ship] of shipsCache.entries()) {
@@ -162,19 +229,79 @@ export async function GET() {
 
   const ships = Array.from(shipsCache.values());
 
+  // Dynamically calculate live traffic (Fast approximation of Haversine)
+  const getDistanceKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+    const dx = (lng1 - lng2) * Math.cos((lat1 + lat2) / 2 * Math.PI / 180);
+    const dy = lat1 - lat2;
+    return Math.sqrt(dx * dx + dy * dy) * 111.32;
+  };
+
+  const dynamicPorts = PORTS.map(port => {
+    let nearbyCount = 0;
+    let waitingCount = 0;
+
+    for (let i = 0; i < ships.length; i++) {
+      if (getDistanceKm(port.lat, port.lng, ships[i].lat, ships[i].lng) < 50) {
+        nearbyCount++;
+        // If speed is less than 0.5 knots, consider it anchored/waiting
+        if (ships[i].speed < 0.5 && ships[i].type !== 'military') {
+          waitingCount++;
+        }
+      }
+    }
+
+    // Heuristic: More than 40% waiting indicates congestion
+    const congestionRatio = nearbyCount > 0 ? waitingCount / nearbyCount : 0;
+    let congestionStatus = 'NORMAL';
+    let estDwellTime = '1-2 Days';
+    
+    if (congestionRatio > 0.6 || waitingCount > 30) {
+      congestionStatus = 'SEVERE';
+      estDwellTime = '7+ Days';
+    } else if (congestionRatio > 0.4 || waitingCount > 15) {
+      congestionStatus = 'CONGESTED';
+      estDwellTime = '3-5 Days';
+    }
+
+    return {
+      ...port,
+      volume: `${port.volume} | LIVE: ${nearbyCount} (WAITING: ${waitingCount})`,
+      congestion: congestionStatus,
+      dwell_time: estDwellTime
+    };
+  });
+
+  const dynamicChokepoints = CHOKEPOINTS.map(choke => {
+    let nearbyCount = 0;
+    for (let i = 0; i < ships.length; i++) {
+      if (getDistanceKm(choke.lat, choke.lng, ships[i].lat, ships[i].lng) < 100) nearbyCount++;
+    }
+    
+    // Dynamically adjust risk based on live ship concentration
+    let dynamicRisk = choke.risk;
+    if (nearbyCount > 50) dynamicRisk = 'CRITICAL';
+    else if (nearbyCount > 20 && dynamicRisk !== 'CRITICAL') dynamicRisk = 'HIGH';
+    else if (nearbyCount > 5 && dynamicRisk === 'LOW') dynamicRisk = 'ELEVATED';
+
+    return {
+      ...choke,
+      traffic: `${choke.traffic} | LIVE SHIPS: ${nearbyCount}`,
+      risk: dynamicRisk
+    };
+  });
+
   return NextResponse.json({
-    ports: PORTS,
-    chokepoints: CHOKEPOINTS,
+    ports: dynamicPorts,
+    chokepoints: dynamicChokepoints,
     ships: ships,
-    total_ports: PORTS.length,
-    total_chokepoints: CHOKEPOINTS.length,
+    total_ports: dynamicPorts.length,
+    total_chokepoints: dynamicChokepoints.length,
     total_ships: ships.length,
     timestamp: new Date().toISOString(),
   }, {
     headers: { 
-      'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
-      'Pragma': 'public',
-      'Expires': '30',
-    }
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Pragma': 'no-cache'
+    },
   });
 }

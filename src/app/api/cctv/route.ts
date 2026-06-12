@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { stealthFetch } from '@/lib/stealthFetch';
 import { fetchAsfinagCameras } from './asfinag';
 import { fetchBulgariaCameras } from './bulgaria';
 import { fetchGreeceCameras } from './greece';
@@ -7,6 +8,14 @@ import { fetchMacedoniaCameras } from './macedonia';
 import { fetchTurkeyCameras } from './turkey';
 import { fetchRomaniaCameras } from './romania';
 import { fetchAustraliaCameras } from './australia';
+import { fetchItalyCameras } from './italy';
+import { fetchCzechiaCameras } from './czechia';
+import { fetchSlovakiaCameras } from './slovakia';
+import { fetchGermanyCameras } from './germany';
+import { fetchFranceCameras } from './france';
+import { fetchSpainCameras } from './spain';
+import { fetchPolandCameras } from './poland';
+import { fetchJapanCameras } from './japan';
 
 /**
  * OSIRIS — Worldwide CCTV Camera API v2
@@ -20,7 +29,7 @@ import { fetchAustraliaCameras } from './australia';
 // ── UK: Transport for London JamCams (~900) ──
 async function fetchTfLCameras(): Promise<any[]> {
   try {
-    const res = await fetch('https://api.tfl.gov.uk/Place/Type/JamCam', { signal: AbortSignal.timeout(12000) });
+    const res = await stealthFetch('https://api.tfl.gov.uk/Place/Type/JamCam', { signal: AbortSignal.timeout(12000) });
     if (!res.ok) return [];
     const data = await res.json();
     return (data || []).map((cam: any) => {
@@ -39,7 +48,7 @@ async function fetchTfLCameras(): Promise<any[]> {
 // ── US-WEST: WSDOT Washington State (~500) ──
 async function fetchWSDOTCameras(): Promise<any[]> {
   try {
-    const res = await fetch('https://data.wsdot.wa.gov/log/public/cameras.json', { signal: AbortSignal.timeout(10000) });
+    const res = await stealthFetch('https://data.wsdot.wa.gov/log/public/cameras.json', { signal: AbortSignal.timeout(10000) });
     if (!res.ok) return [];
     const data = await res.json();
     return (data || []).map((cam: any) => ({
@@ -55,7 +64,7 @@ async function fetchCaltransCameras(): Promise<any[]> {
   const allCams: any[] = [];
   for (const dist of ['d03', 'd04', 'd05', 'd06', 'd07', 'd08', 'd10', 'd11', 'd12']) {
     try {
-      const res = await fetch(`https://cwwp2.dot.ca.gov/data/${dist}/cctv/cctvStatus${dist.toUpperCase()}.json`, { signal: AbortSignal.timeout(8000) });
+      const res = await stealthFetch(`https://cwwp2.dot.ca.gov/data/${dist}/cctv/cctvStatus${dist.toUpperCase()}.json`, { signal: AbortSignal.timeout(8000) });
       if (!res.ok) continue;
       const data = await res.json();
       for (const cam of (data?.data || [])) {
@@ -70,13 +79,50 @@ async function fetchCaltransCameras(): Promise<any[]> {
   return allCams;
 }
 
-// ── CANADA: Ottawa, Toronto, Montreal ──
+// ── CANADA: Ottawa, Toronto, Montreal, Quebec ──
 async function fetchCanadaCameras(): Promise<any[]> {
   const cams: any[] = [];
 
-  // Ottawa MTO Highway Cameras
+  // Ottawa Municipal Cameras (Comprehensive)
   try {
-    const res = await fetch('https://511on.ca/api/v2/get/cameras', { signal: AbortSignal.timeout(10000), headers: { 'Accept': 'application/json' } });
+    const res = await stealthFetch('https://traffic.ottawa.ca/beta/camera_list', { signal: AbortSignal.timeout(10000) });
+    if (res.ok) {
+      const data = await res.json();
+      for (const cam of (data || [])) {
+        if (!cam.latitude || !cam.longitude) continue;
+        cams.push({
+          id: `ottawa-muni-${cam.id}`, lat: cam.latitude, lng: cam.longitude,
+          name: cam.description || 'Ottawa Traffic Camera', city: 'Ottawa', country: 'Canada',
+          feed_url: `https://traffic.ottawa.ca/map/camera?id=${cam.number || cam.id}`, source: 'City of Ottawa',
+        });
+      }
+    }
+  } catch { /* silent */ }
+
+  // Quebec 511 (Comprehensive - covers Montreal, Quebec City, highways)
+  try {
+    const res = await stealthFetch('https://ws.mapserver.transports.gouv.qc.ca/swtq?service=wfs&version=2.0.0&request=getfeature&typename=ms:infos_cameras&outfile=Camera&srsname=EPSG:4326&outputformat=geojson', { signal: AbortSignal.timeout(10000) });
+    if (res.ok) {
+      const data = await res.json();
+      for (const feature of (data.features || [])) {
+        const coords = feature.geometry?.coordinates;
+        const p = feature.properties;
+        if (!coords || !p || !p.IDEcamera) continue;
+        
+        cams.push({
+          id: `quebec511-${p.IDEcamera}`, lat: coords[1], lng: coords[0],
+          name: p.DescriptionLocalisationEn || p.DescriptionLocalisationFr || 'Quebec 511 Camera', city: p.NomRegionDiffusion || 'Quebec', country: 'Canada',
+          stream_url: p.URL_FLUX_DONNEE ? p.URL_FLUX_DONNEE.replace('FenetreVideo.html', 'camera.ashx') + '&format=mp4' : `https://www.quebec511.info/Carte/Fenetres/camera.ashx?id=${p.IDEcamera}&format=mp4`,
+          stream_type: 'mp4',
+          source: 'Quebec 511',
+        });
+      }
+    }
+  } catch { /* silent */ }
+
+  // Ontario 511 (MTO Highway Cameras)
+  try {
+    const res = await stealthFetch('https://511on.ca/api/v2/get/cameras', { signal: AbortSignal.timeout(10000) });
     if (res.ok) {
       const data = await res.json();
       for (const cam of (data || [])) {
@@ -90,14 +136,14 @@ async function fetchCanadaCameras(): Promise<any[]> {
     }
   } catch { /* silent */ }
 
-  // Ville de Montréal cameras
+  // Ville de Montréal municipal cameras
   try {
-    const res = await fetch('https://ville.montreal.qc.ca/circulation/sites/ville.montreal.qc.ca.circulation/files/cameras.json', { signal: AbortSignal.timeout(8000) });
+    const res = await stealthFetch('https://ville.montreal.qc.ca/circulation/sites/ville.montreal.qc.ca.circulation/files/cameras.json', { signal: AbortSignal.timeout(8000) });
     if (res.ok) {
       const data = await res.json();
       for (const cam of (data || [])) {
         cams.push({
-          id: `mtl-${cams.length}`, lat: cam.latitude || cam.lat, lng: cam.longitude || cam.lng,
+          id: `mtl-muni-${cams.length}`, lat: cam.latitude || cam.lat, lng: cam.longitude || cam.lng,
           name: cam.description || cam.name || 'Montréal Camera', city: 'Montréal', country: 'Canada',
           feed_url: cam.url || cam.imageUrl || '', source: 'Ville MTL',
         });
@@ -105,16 +151,8 @@ async function fetchCanadaCameras(): Promise<any[]> {
     }
   } catch { /* silent */ }
 
-  // Curated Ottawa/Toronto cameras from known public feeds
+  // Curated Toronto cameras (fallback if 511ON fails)
   const curated = [
-    { id: 'ott-1', lat: 45.4215, lng: -75.6972, name: 'Parliament Hill / Wellington', city: 'Ottawa', country: 'Canada', feed_url: 'https://traffic.ottawa.ca/map/camera?id=1', source: 'Ottawa' },
-    { id: 'ott-2', lat: 45.4231, lng: -75.6831, name: 'Rideau / Sussex', city: 'Ottawa', country: 'Canada', feed_url: 'https://traffic.ottawa.ca/map/camera?id=2', source: 'Ottawa' },
-    { id: 'ott-3', lat: 45.4195, lng: -75.7009, name: 'Bank / Sparks', city: 'Ottawa', country: 'Canada', feed_url: 'https://traffic.ottawa.ca/map/camera?id=3', source: 'Ottawa' },
-    { id: 'ott-4', lat: 45.4249, lng: -75.6950, name: 'King Edward / Rideau', city: 'Ottawa', country: 'Canada', feed_url: 'https://traffic.ottawa.ca/map/camera?id=4', source: 'Ottawa' },
-    { id: 'ott-5', lat: 45.3968, lng: -75.7398, name: 'Merivale / Baseline', city: 'Ottawa', country: 'Canada', feed_url: 'https://traffic.ottawa.ca/map/camera?id=5', source: 'Ottawa' },
-    { id: 'ott-6', lat: 45.3484, lng: -75.7580, name: 'Fallowfield / Woodroffe', city: 'Ottawa', country: 'Canada', feed_url: 'https://traffic.ottawa.ca/map/camera?id=6', source: 'Ottawa' },
-    { id: 'ott-7', lat: 45.4012, lng: -75.6518, name: 'Hwy 417 / Vanier Pkwy', city: 'Ottawa', country: 'Canada', feed_url: 'https://traffic.ottawa.ca/map/camera?id=7', source: 'Ottawa' },
-    { id: 'ott-8', lat: 45.4475, lng: -75.4822, name: 'Innes / Orleans Blvd', city: 'Ottawa', country: 'Canada', feed_url: 'https://traffic.ottawa.ca/map/camera?id=8', source: 'Ottawa' },
     { id: 'tor-1', lat: 43.6532, lng: -79.3832, name: 'Yonge / Dundas Square', city: 'Toronto', country: 'Canada', feed_url: 'https://511on.ca/api/v2/get/cameras', source: '511 Ontario' },
     { id: 'tor-2', lat: 43.6426, lng: -79.3871, name: 'CN Tower / Lakeshore', city: 'Toronto', country: 'Canada', feed_url: 'https://511on.ca/api/v2/get/cameras', source: '511 Ontario' },
     { id: 'tor-3', lat: 43.6711, lng: -79.3868, name: 'Bloor / Yonge', city: 'Toronto', country: 'Canada', feed_url: 'https://511on.ca/api/v2/get/cameras', source: '511 Ontario' },
@@ -123,7 +161,7 @@ async function fetchCanadaCameras(): Promise<any[]> {
 
   // Alberta 511
   try {
-    const res = await fetch('https://511.alberta.ca/api/v2/get/cameras', { signal: AbortSignal.timeout(10000), headers: { 'Accept': 'application/json' } });
+    const res = await stealthFetch('https://511.alberta.ca/api/v2/get/cameras', { signal: AbortSignal.timeout(10000) });
     if (res.ok) {
       const data = await res.json();
       for (const cam of (data || [])) {
@@ -145,7 +183,7 @@ async function fetchUSCentralCameras(): Promise<any[]> {
   const cams: any[] = [];
   // Illinois DOT
   try {
-    const res = await fetch('https://www.travelmidwest.com/lmiga/cameraReport.json', { signal: AbortSignal.timeout(8000) });
+    const res = await stealthFetch('https://www.travelmidwest.com/lmiga/cameraReport.json', { signal: AbortSignal.timeout(8000) });
     if (res.ok) {
       const data = await res.json();
       for (const cam of (data?.cameraReports || data || []).slice(0, 800)) {
@@ -201,7 +239,7 @@ async function fetchUSEastCameras(): Promise<any[]> {
   );
   // Florida 511
   try {
-    const res = await fetch('https://fl511.com/api/v2/cameras', { signal: AbortSignal.timeout(8000), headers: { 'Accept': 'application/json' } });
+    const res = await stealthFetch('https://fl511.com/api/v2/cameras', { signal: AbortSignal.timeout(8000) });
     if (res.ok) {
       const data = await res.json();
       for (const cam of (data || []).slice(0, 800)) {
@@ -224,7 +262,7 @@ async function fetchEuropeCameras(): Promise<any[]> {
 
   // Netherlands Rijkswaterstaat
   try {
-    const res = await fetch('https://opendata.ndw.nu/cameras.json', { signal: AbortSignal.timeout(8000) });
+    const res = await stealthFetch('https://opendata.ndw.nu/cameras.json', { signal: AbortSignal.timeout(8000) });
     if (res.ok) {
       const data = await res.json();
       for (const cam of (data || []).slice(0, 1000)) {
@@ -249,7 +287,7 @@ async function fetchAsiaCameras(): Promise<any[]> {
 
   // Singapore Live Traffic Images
   try {
-    const res = await fetch('https://api.data.gov.sg/v1/transport/traffic-images', { signal: AbortSignal.timeout(10000) });
+    const res = await stealthFetch('https://api.data.gov.sg/v1/transport/traffic-images', { signal: AbortSignal.timeout(10000) });
     if (res.ok) {
       const data = await res.json();
       const items = data.items?.[0]?.cameras || [];
@@ -273,8 +311,52 @@ async function fetchAsiaCameras(): Promise<any[]> {
 }
 
 
+// ── MIDDLE EAST: Israel, Lebanon ──
+async function fetchMiddleEastCameras(): Promise<any[]> {
+  const cams: any[] = [];
+  
+  // Israel Curated (Embedded)
+  cams.push(
+    {
+      id: 'il-israel-multicam', lat: 32.0853, lng: 34.7818,
+      name: 'Israel Multi-Cam (Live)', city: 'Tel Aviv', country: 'Israel',
+      stream_url: 'https://www.youtube.com/embed/gmtlJ_m2r5A?autoplay=1&mute=1',
+      stream_type: 'iframe',
+      source: 'YouTube Live',
+    },
+    {
+      id: 'il-jerusalem-live', lat: 31.7767, lng: 35.2345,
+      name: 'Jerusalem Western Wall', city: 'Jerusalem', country: 'Israel',
+      stream_url: 'https://www.youtube.com/embed/77akujLn4k8?autoplay=1&mute=1',
+      stream_type: 'iframe',
+      source: 'YouTube Live',
+    }
+  );
+
+  // Lebanon Curated (Embedded)
+  cams.push(
+    {
+      id: 'lb-beirut-skyline', lat: 33.8938, lng: 35.5018,
+      name: 'Beirut Skyline Live', city: 'Beirut', country: 'Lebanon',
+      stream_url: 'https://www.youtube.com/embed/qJf4NqPKLjI?autoplay=1&mute=1',
+      stream_type: 'iframe',
+      source: 'YouTube Live',
+    },
+    {
+      id: 'lb-me-multicam', lat: 33.2721, lng: 35.2033,
+      name: 'Middle East Multi-Cam (Live)', city: 'Regional', country: 'Middle East',
+      stream_url: 'https://www.youtube.com/embed/oxT5R6I0N6E?autoplay=1&mute=1',
+      stream_type: 'iframe',
+      source: 'YouTube Live',
+    }
+  );
+
+  return cams;
+}
+
 // ═══ REGION MAPPING ═══
 const REGION_FETCHERS: Record<string, () => Promise<any[]>> = {
+  'middle-east': fetchMiddleEastCameras,
   'uk': fetchTfLCameras,
   'us-west': async () => [...await fetchWSDOTCameras(), ...await fetchCaltransCameras()],
   'us-east': fetchUSEastCameras,
@@ -289,6 +371,14 @@ const REGION_FETCHERS: Record<string, () => Promise<any[]>> = {
   'turkey': fetchTurkeyCameras,
   'romania': fetchRomaniaCameras,
   'australia': fetchAustraliaCameras,
+  'italy': fetchItalyCameras,
+  'czechia': fetchCzechiaCameras,
+  'slovakia': fetchSlovakiaCameras,
+  'germany': fetchGermanyCameras,
+  'france': fetchFranceCameras,
+  'spain': fetchSpainCameras,
+  'poland': fetchPolandCameras,
+  'japan': fetchJapanCameras,
 };
 
 // Determine which regions to fetch based on viewport bounds
@@ -311,9 +401,17 @@ function getRegionsForBounds(lat: number, lng: number, radius: number): string[]
   const inMacedonia = lat > 40.8 && lat < 42.8 && lng > 20.4 && lng < 23.2;
   const inRomania = lat > 43.5 && lat < 48.5 && lng > 20 && lng < 29.8;
   const inTurkey = lat > 35.5 && lat < 42.5 && lng > 25.5 && lng < 45;
+  const inItaly = lat > 36 && lat < 47.5 && lng > 6.5 && lng < 18.5;
+  const inCzechia = lat > 48.5 && lat < 51.1 && lng > 12 && lng < 18.9;
+  const inSlovakia = lat > 47.7 && lat < 49.6 && lng > 16.8 && lng < 22.6;
+  const inGermany = lat > 47 && lat < 55.1 && lng > 5.8 && lng < 15.1;
+  const inFrance = lat > 42.3 && lat < 51.1 && lng > -5 && lng < 8.3;
+  const inSpain = lat > 27 && lat < 43.8 && lng > -18.2 && lng < 4.4;
+  const inPoland = lat > 49.0 && lat < 54.8 && lng > 14.1 && lng < 24.1;
   const inBalkans = inBulgaria || inGreece || inSerbia || inMacedonia || inRomania || inTurkey;
+  const inWesternEurope = inItaly || inCzechia || inSlovakia || inGermany || inFrance || inSpain || inPoland;
 
-  if (lat > 35 && lat < 72 && lng > -11 && lng < 40 && !inBalkans) {
+  if (lat > 35 && lat < 72 && lng > -11 && lng < 40 && !inBalkans && !inWesternEurope) {
     regions.push('europe');
   }
   if (inBulgaria) regions.push('bulgaria');
@@ -322,6 +420,20 @@ function getRegionsForBounds(lat: number, lng: number, radius: number): string[]
   if (inMacedonia) regions.push('macedonia');
   if (inRomania) regions.push('romania');
   if (inTurkey) regions.push('turkey');
+  if (inItaly) regions.push('italy');
+  if (inCzechia) regions.push('czechia');
+  if (inSlovakia) regions.push('slovakia');
+  if (inGermany) regions.push('germany');
+  if (inFrance) regions.push('france');
+  if (inSpain) regions.push('spain');
+  if (inPoland) regions.push('poland');
+
+  // Middle East
+  const inMiddleEast = lat > 29 && lat < 34.5 && lng > 34 && lng < 36.5;
+  if (inMiddleEast) regions.push('middle-east');
+
+  // Japan
+  if (lat > 24 && lat < 46 && lng > 122 && lng < 154) regions.push('japan');
 
   // Asia (includes Middle East, SE Asia, overriding parts of china but that's ok they can both load)
   if ((lat > -10 && lat < 60 && lng > 60 && lng < 150)) regions.push('asia');
@@ -368,6 +480,10 @@ export async function GET(request: Request) {
       }
     }
 
+    const cacheControl = allCameras.length < 50 
+      ? 'no-store, max-age=0' 
+      : 'public, s-maxage=300, stale-while-revalidate=600';
+
     return NextResponse.json({
       cameras: allCameras,
       total: allCameras.length,
@@ -375,7 +491,7 @@ export async function GET(request: Request) {
       regions: regionsToFetch,
       timestamp: new Date().toISOString(),
     }, {
-      headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
+      headers: { 'Cache-Control': cacheControl },
     });
   } catch (error) {
     console.error('CCTV fetch error:', error);
