@@ -1,0 +1,532 @@
+version: 1
+project:
+  name: osiris
+  description: Osiris readiness slice covering the documented npm native workflow and Docker Compose self-hosted runtime
+  type: application
+metadata:
+  ota:
+    minimum_version: "1.6.18"
+toolchains:
+  node:
+    provider: corepack
+    version: "^22.13.0"
+execution:
+  default_context: host
+  contexts:
+    host:
+      backend: native
+    docker-host:
+      backend: native
+      requirements:
+        tools:
+          docker: "*"
+    app:
+      backend: container
+      lifecycle: persistent
+      attachments:
+        isolated_paths:
+          - node_modules
+          - .next
+      container:
+        image: node:22-alpine
+        engines:
+          - docker
+          - podman
+tools:
+  npm:
+    version: "*"
+  docker:
+    version: "*"
+    required: false
+env:
+  vars:
+    OSIRIS_PORT:
+      default: "3000"
+    SCANNER_URL:
+      required: false
+    SCANNER_KEY:
+      required: false
+    FIRMS_API_KEY:
+      required: false
+    OPENSKY_CLIENT_ID:
+      required: false
+    OPENSKY_CLIENT_SECRET:
+      required: false
+    N2YO_API_KEY:
+      required: false
+    AIS_API_KEY:
+      required: false
+  sources:
+    - kind: dotenv
+      path: .env
+surfaces:
+  app:
+    kind: http
+    port: 3000
+    path: /
+    readiness:
+      kind: http
+      method: GET
+      path: /
+      headers:
+        Accept: text/html
+      success:
+        status:
+          - 200
+      body:
+        contains: "<!DOCTYPE html>"
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 10s
+  health:
+    kind: http
+    port: 3000
+    path: /api/health
+    readiness:
+      kind: http
+      method: GET
+      path: /api/health
+      success:
+        status:
+          - 200
+      body:
+        contains: "\"status\":\"operational\""
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 10s
+tasks:
+  setup:env:
+    context: host
+    description: Create the runtime env file from the repository template when missing
+    notes: |
+      This follows README + DOCKER documentation.
+      It only copies `.env.template` when `.env` is absent.
+    category: setup
+    action:
+      kind: copy_if_missing
+      from: .env.template
+      to: .env
+    effects:
+      writes:
+        - .env
+  install:
+    context: host
+    description: Install dependencies with npm using the committed lockfile
+    notes: |
+      This is the deterministic dependency hydration path for this repository.
+    category: setup
+    run: npm ci
+    execution:
+      default_mode: native
+      modes:
+        native:
+          context: host
+          run: npm ci
+        container:
+          context: app
+          run: npm ci
+    requirements:
+      toolchains:
+        - node
+      tools:
+        npm: "*"
+    effects:
+      writes:
+        - node_modules
+      network: true
+  lint:
+    context: host
+    description: Run the repository lint surface
+    notes: |
+      Maps directly to `npm run lint`.
+    category: test
+    run: npm run lint
+    execution:
+      default_mode: native
+      modes:
+        native:
+          context: host
+          run: npm run lint
+        container:
+          context: app
+          run: npm run lint
+    requirements:
+      toolchains:
+        - node
+      tools:
+        npm: "*"
+      checks:
+        - workspace-dependencies-installed
+    depends_on:
+      - install
+  build:
+    context: host
+    description: Build the Next.js production bundle
+    notes: |
+      Maps directly to `npm run build`.
+    category: build
+    run: npm run build
+    execution:
+      default_mode: native
+      modes:
+        native:
+          context: host
+          run: npm run build
+        container:
+          context: app
+          run: npm run build
+    requirements:
+      toolchains:
+        - node
+      tools:
+        npm: "*"
+      checks:
+        - workspace-dependencies-installed
+    depends_on:
+      - install
+    effects:
+      writes:
+        - .next
+  typecheck:
+    context: host
+    description: Run TypeScript typechecking through the project tsconfig
+    notes: |
+      The repository does not declare a dedicated `npm run typecheck` script.
+      This task runs the direct TypeScript compiler check.
+    category: test
+    run: npm exec -- tsc --noEmit
+    execution:
+      default_mode: native
+      modes:
+        native:
+          context: host
+          run: npm exec -- tsc --noEmit
+        container:
+          context: app
+          run: npm exec -- tsc --noEmit
+    requirements:
+      toolchains:
+        - node
+      tools:
+        npm: "*"
+      checks:
+        - workspace-dependencies-installed
+    depends_on:
+      - install
+    effects:
+      writes:
+        - tsconfig.tsbuildinfo
+  verify:
+    context: host
+    description: Run the bounded verification sequence for this repository
+    notes: |
+      This sequence reflects currently available validation surfaces in this repo:
+      typecheck and build. The repo exposes `npm run lint`, but the current
+      baseline lint surface is red and remains a separate task until upstream fixes it.
+    category: test
+    run: npm exec -- tsc --noEmit && npm run build
+    execution:
+      default_mode: native
+      modes:
+        native:
+          context: host
+          run: npm exec -- tsc --noEmit && npm run build
+        container:
+          context: app
+          run: npm exec -- tsc --noEmit && npm run build
+    requirements:
+      toolchains:
+        - node
+      tools:
+        npm: "*"
+      checks:
+        - workspace-dependencies-installed
+    depends_on:
+      - install
+    effects:
+      writes:
+        - tsconfig.tsbuildinfo
+        - .next
+  dev:
+    context: host
+    description: Run the local development server
+    notes: |
+      Maps directly to the documented Quick Start path.
+      Container mode binds to `0.0.0.0` for host projection.
+    category: dev
+    run: npm run dev
+    execution:
+      default_mode: native
+      modes:
+        native:
+          context: host
+          run: npm run dev
+          runtime:
+            kind: service
+            surfaces:
+              app:
+                project:
+                  host:
+                    primary: true
+              health: {}
+        container:
+          context: app
+          run: npm run dev -- --hostname 0.0.0.0 --port 3000
+          runtime:
+            kind: service
+            surfaces:
+              app:
+                bind:
+                  address: 0.0.0.0
+                  port:
+                    mode: fixed
+                    value: 3000
+                project:
+                  host:
+                    port:
+                      mode: auto
+                    primary: true
+    requirements:
+      toolchains:
+        - node
+      tools:
+        npm: "*"
+      checks:
+        - workspace-dependencies-installed
+    depends_on:
+      - install
+    effects:
+      writes:
+        - .next
+    runtime:
+      kind: service
+      surfaces:
+        app:
+          project:
+            host:
+              primary: true
+        health: {}
+  start:
+    context: host
+    description: Run the production startup path from built artifacts
+    notes: |
+      Maps directly to `npm run start` after `npm run build`.
+      Container mode binds to `0.0.0.0` for host projection.
+    category: dev
+    run: npm run start
+    execution:
+      default_mode: native
+      modes:
+        native:
+          context: host
+          run: npm run start
+          runtime:
+            kind: service
+            surfaces:
+              app:
+                project:
+                  host:
+                    primary: true
+              health: {}
+        container:
+          context: app
+          run: npm run start -- --hostname 0.0.0.0 --port 3000
+          runtime:
+            kind: service
+            surfaces:
+              app:
+                bind:
+                  address: 0.0.0.0
+                  port:
+                    mode: fixed
+                    value: 3000
+                project:
+                  host:
+                    port:
+                      mode: auto
+                    primary: true
+    requirements:
+      toolchains:
+        - node
+      tools:
+        npm: "*"
+      checks:
+        - workspace-dependencies-installed
+    depends_on:
+      - build
+    runtime:
+      kind: service
+      surfaces:
+        app:
+          project:
+            host:
+              primary: true
+        health: {}
+  dev:docker:
+    context: docker-host
+    description: Run the documented self-host Docker Compose stack
+    notes: |
+      Maps directly to README and DOCKER.md.
+      The documented self-host path is detached `docker compose up -d`, not an attached compose session.
+    category: dev
+    run: docker compose up -d
+    requirements:
+      tools:
+        docker: "*"
+      checks:
+        - docker-backend-ready
+    effects:
+      external_state:
+        - docker
+    runtime:
+      kind: service
+      surfaces:
+        app:
+          project:
+            host:
+              primary: true
+        health: {}
+workflows:
+  default: app
+  verify:
+    intent: ci_verification
+    description: Native verification path for install, typecheck, and build
+    setup:
+      task: install
+    run:
+      task: verify
+  app:
+    intent: local_development
+    description: Canonical host-native development workflow
+    setup:
+      task: install
+    run:
+      task: dev
+    readiness:
+      surfaces:
+        - app
+        - health
+    exposes:
+      - surface: app
+      - surface: health
+  app:container:
+    intent: local_development
+    description: Containerized development workflow using the declared container context
+    setup:
+      task: install
+    run:
+      task: dev
+    readiness:
+      surfaces:
+        - app
+        - health
+    exposes:
+      - surface: app
+      - surface: health
+  prod:
+    intent: packaged_runtime
+    description: Host-native production startup from built artifacts
+    setup:
+      task: build
+    run:
+      task: start
+    readiness:
+      surfaces:
+        - app
+        - health
+    exposes:
+      - surface: app
+      - surface: health
+  prod:container:
+    intent: packaged_runtime
+    description: Containerized production startup from built artifacts
+    setup:
+      task: build
+    run:
+      task: start
+    readiness:
+      surfaces:
+        - app
+        - health
+    exposes:
+      - surface: app
+      - surface: health
+  docker:
+    intent: self_hosted_development
+    description: Docker Compose self-host workflow from repository docs
+    run:
+      task: dev:docker
+    readiness:
+      surfaces:
+        - app
+        - health
+    exposes:
+      - surface: app
+      - surface: health
+checks:
+  - name: docker-backend-ready
+    kind: precondition
+    severity: error
+    run: docker info >/dev/null 2>&1
+    timeout: 10000
+  - name: workspace-dependencies-installed
+    kind: file
+    severity: error
+    path: node_modules/next/package.json
+    expect: file
+    timeout: 10000
+  - name: env-template-present
+    kind: file
+    severity: info
+    path: .env.template
+    expect: file
+    timeout: 10000
+agent:
+  posture: readiness_strict
+  entrypoint: install
+  default_task: verify
+  safe_tasks: []
+  verify_after_changes: []
+  writable_paths:
+    - src
+    - public
+    - node_modules
+    - .next
+    - package.json
+    - tsconfig.json
+    - tsconfig.tsbuildinfo
+    - eslint.config.mjs
+    - next.config.ts
+  protected_paths:
+    - ota.yaml
+    - .github/workflows/test-ota-contract-matrix.yml
+    - AGENTS.md
+    - ota-pressure-matrix.md
+    - ota-pressure-test-osiris.md
+    - .env
+    - .env.example
+    - .env.template
+    - package-lock.json
+    - docker-compose.yml
+    - Dockerfile
+    - DOCKER.md
+    - README.md
+  bootstrap:
+    ota:
+      note: Install ota when missing so contributors and agents can run the readiness workflows declared in this contract.
+      sh: curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION=v1.6.20 sh
+      powershell: $env:OTA_VERSION='v1.6.20'; irm https://dist.ota.run/install.ps1 | iex
+  notes: |
+    Use `ota tasks --use .` to list runnable tasks and workflows before execution.
+    Use `ota tasks --safe --use .` to confirm that this slice intentionally exposes no agent-safe task surface.
+    Use `ota run setup:env .` to create `.env` from `.env.template` only when missing.
+    Use `ota up --workflow app --native .` for the canonical host-native dev path.
+    Use `ota up --workflow app:container --container .` for the containerized dev path.
+    Use `ota up --workflow prod --native .` and `ota up --workflow prod:container --container .`
+    for built startup paths.
+    Use `ota up --workflow docker --native .` for the documented Docker Compose self-host flow.
+    Use `ota up --workflow verify --native .` before PRs.
+    No tasks are agent-safe by default in this slice because verification depends on install/network
+    hydration and runtime-state mutation surfaces.

@@ -1,0 +1,476 @@
+name: 'Test: Ota contract matrix'
+
+on:
+  workflow_dispatch:
+    inputs:
+      ota_version:
+        description: Released Ota version to install for this matrix run
+        required: false
+        default: v1.6.20
+      run_runtime_proof:
+        description: Run runtime proof steps (docker/app/prod native+container)
+        required: false
+        default: "false"
+  pull_request:
+    paths:
+      - 'ota.yaml'
+      - '.github/workflows/test-ota-contract-matrix.yml'
+  push:
+    paths:
+      - 'ota.yaml'
+      - '.github/workflows/test-ota-contract-matrix.yml'
+
+concurrency:
+  group: ota-contract-matrix-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  OTA_NO_UPDATE_CHECK: '1'
+  OTA_VERSION: ${{ github.event.inputs.ota_version || 'v1.6.20' }}
+  OTA_MATRIX_ARTIFACT_DIR: .ota/contract-matrix
+
+jobs:
+  native:
+    name: Ota Contract Matrix (Cross-OS + Ubuntu Runtime - ${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu-bash
+            os: ubuntu-latest
+            docker_ready: true
+            full_proof: true
+          - name: macos-bash
+            os: macos-latest
+            docker_ready: false
+            full_proof: false
+          - name: windows-bash
+            os: windows-latest
+            docker_ready: false
+            full_proof: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install ota (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_VERSION}" sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ota (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OTA_VERSION = "${env:OTA_VERSION}"
+          irm https://dist.ota.run/install.ps1 | iex
+          (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Prepare artifact directory
+        shell: bash
+        run: mkdir -p "$OTA_MATRIX_ARTIFACT_DIR"
+
+      - name: Print Ota version
+        shell: bash
+        run: |
+          ota --version --json > "$OTA_MATRIX_ARTIFACT_DIR/ota-version.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-version.json"
+
+      - name: Enforce minimum Ota version from contract
+        shell: bash
+        run: |
+          min_version="$(sed -n 's/^[[:space:]]*minimum_version:[[:space:]]*"\([^"]*\)"/\1/p' ota.yaml | head -n 1)"
+          if [ -z "$min_version" ]; then
+            echo "ota.yaml is missing metadata.ota.minimum_version"
+            exit 1
+          fi
+          node - "$OTA_MATRIX_ARTIFACT_DIR/ota-version.json" "$min_version" <<'NODE'
+          const fs = require("fs");
+          const versionPath = process.argv[2];
+          const minimum = process.argv[3];
+          const payload = JSON.parse(fs.readFileSync(versionPath, "utf8"));
+          const actual = payload.semver || String(payload.version || "").replace(/^v/, "");
+          const parse = (v) => v.split("-")[0].split(".").map((part) => Number.parseInt(part, 10) || 0);
+          const compare = (a, b) => {
+            const pa = parse(a);
+            const pb = parse(b);
+            const length = Math.max(pa.length, pb.length);
+            for (let i = 0; i < length; i += 1) {
+              const left = pa[i] || 0;
+              const right = pb[i] || 0;
+              if (left > right) return 1;
+              if (left < right) return -1;
+            }
+            return 0;
+          };
+          if (!actual) {
+            console.error("Unable to resolve installed ota semver from ota --version --json");
+            process.exit(1);
+          }
+          if (compare(actual, minimum) < 0) {
+            console.error(`Installed ota ${actual} is below minimum_version ${minimum}`);
+            process.exit(1);
+          }
+          console.log(`ota version gate passed: ${actual} >= ${minimum}`);
+          NODE
+
+      - name: Validate contract
+        shell: bash
+        run: |
+          ota validate --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-validate.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-validate.json"
+          ota validate .
+
+      - name: Inspect doctor readiness
+        shell: bash
+        run: |
+          set +e
+          ota doctor --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-doctor.json"
+          doctor_status=$?
+          set -e
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-doctor.json"
+          node - "$OTA_MATRIX_ARTIFACT_DIR/ota-doctor.json" <<'NODE'
+          const fs = require("fs");
+          const report = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (!report || typeof report.ok !== "boolean" || !report.summary || !report.summary.verdict) {
+            console.error(JSON.stringify(report, null, 2));
+            process.exit(1);
+          }
+          console.log(`doctor verdict: ${report.summary.verdict}`);
+          NODE
+          set +e
+          ota doctor .
+          doctor_plain_status=$?
+          set -e
+          if [ "$doctor_status" -ne 0 ] || [ "$doctor_plain_status" -ne 0 ]; then
+            echo "doctor reported repo readiness blockers or warnings on this runner; JSON and plain output captured for review"
+          fi
+
+      - name: List runnable tasks
+        shell: bash
+        run: |
+          ota tasks --use --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-use.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-use.json"
+          ota tasks --use .
+
+      - name: List agent-safe tasks
+        shell: bash
+        run: |
+          ota tasks --safe --use --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-safe-use.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-safe-use.json"
+          ota tasks --safe --use .
+
+      - name: List verify workflow tasks
+        shell: bash
+        run: |
+          ota tasks --workflow verify --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-verify.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-verify.json"
+          ota tasks --workflow verify .
+
+      - name: List app workflow tasks
+        shell: bash
+        run: |
+          ota tasks --workflow app --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-app.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-app.json"
+          ota tasks --workflow app .
+
+      - name: List prod workflow tasks
+        shell: bash
+        run: |
+          ota tasks --workflow prod --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-prod.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-prod.json"
+          ota tasks --workflow prod .
+
+      - name: List app:container workflow tasks
+        if: ${{ matrix.docker_ready }}
+        shell: bash
+        run: |
+          ota tasks --workflow app:container --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-app-container.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-app-container.json"
+          ota tasks --workflow app:container .
+
+      - name: List prod:container workflow tasks
+        if: ${{ matrix.docker_ready }}
+        shell: bash
+        run: |
+          ota tasks --workflow prod:container --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-prod-container.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-prod-container.json"
+          ota tasks --workflow prod:container .
+
+      - name: List docker workflow tasks
+        if: ${{ matrix.docker_ready }}
+        shell: bash
+        run: |
+          ota tasks --workflow docker --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-docker.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-docker.json"
+          ota tasks --workflow docker .
+
+      - name: Export execution topology
+        shell: bash
+        run: |
+          ota execution topology --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-execution-topology.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-execution-topology.json"
+
+      - name: Dry-run default workflow
+        shell: bash
+        run: |
+          ota up --dry-run --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-up-default-dry-run.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-up-default-dry-run.json"
+
+      - name: Dry-run verify task
+        shell: bash
+        run: |
+          ota run verify --dry-run --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-run-verify-dry-run.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-run-verify-dry-run.json"
+
+      - name: Dry-run verify workflow (native)
+        shell: bash
+        run: |
+          ota up --workflow verify --native --dry-run --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-up-verify-native-dry-run.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-up-verify-native-dry-run.json"
+
+      - name: Dry-run app workflow (native)
+        shell: bash
+        run: |
+          ota up --workflow app --native --dry-run --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-up-app-native-dry-run.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-up-app-native-dry-run.json"
+
+      - name: Dry-run prod workflow (native)
+        shell: bash
+        run: |
+          ota up --workflow prod --native --dry-run --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-up-prod-native-dry-run.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-up-prod-native-dry-run.json"
+
+      - name: Container mode planning checks (cross-OS)
+        shell: bash
+        run: |
+          set +e
+          ota up --workflow app:container --container --dry-run --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-up-app-container-cross-os-dry-run.json"
+          app_status=$?
+          ota up --workflow prod:container --container --dry-run --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-up-prod-container-cross-os-dry-run.json"
+          prod_status=$?
+          set -e
+          node - "$OTA_MATRIX_ARTIFACT_DIR/ota-up-app-container-cross-os-dry-run.json" "$OTA_MATRIX_ARTIFACT_DIR/ota-up-prod-container-cross-os-dry-run.json" <<'NODE'
+          const fs = require("fs");
+          for (const path of process.argv.slice(2)) {
+            const report = JSON.parse(fs.readFileSync(path, "utf8"));
+            if (!report.dry_run || !report.status) {
+              console.error(JSON.stringify(report, null, 2));
+              process.exit(1);
+            }
+          }
+          NODE
+          if [ "$app_status" -ne 0 ] || [ "$prod_status" -ne 0 ]; then
+            echo "container dry-run blocked on this host (expected on non-Ubuntu hosted runners)"
+          fi
+
+      - name: Dry-run app:container workflow
+        if: ${{ matrix.docker_ready }}
+        shell: bash
+        run: |
+          ota up --workflow app:container --container --dry-run --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-up-app-container-dry-run.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-up-app-container-dry-run.json"
+
+      - name: Dry-run prod:container workflow
+        if: ${{ matrix.docker_ready }}
+        shell: bash
+        run: |
+          ota up --workflow prod:container --container --dry-run --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-up-prod-container-dry-run.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-up-prod-container-dry-run.json"
+
+      - name: Dry-run docker workflow
+        if: ${{ matrix.docker_ready }}
+        shell: bash
+        run: |
+          ota up --workflow docker --native --dry-run --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-up-docker-native-dry-run.json"
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-up-docker-native-dry-run.json"
+
+      - name: Execute native smoke tasks (cross-OS non-Ubuntu)
+        if: ${{ !matrix.full_proof }}
+        timeout-minutes: 45
+        shell: bash
+        run: ota run --native --stream verify .
+
+      - name: Run native verification task
+        if: ${{ matrix.full_proof }}
+        timeout-minutes: 30
+        shell: bash
+        run: ota run --native --stream verify .
+
+      - name: Run container verification task
+        if: ${{ matrix.full_proof }}
+        timeout-minutes: 45
+        shell: bash
+        run: ota run --container --stream verify .
+
+      - name: Dry-run all non-internal tasks (native coverage lane)
+        if: ${{ matrix.full_proof }}
+        timeout-minutes: 90
+        shell: bash
+        run: |
+          set -euo pipefail
+          ota tasks --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-all.json"
+          jq -c '
+            .tasks[]
+            | select((.internal // false) == false)
+            | {
+                name: .name,
+                supports_native: (
+                  if (.modes | type) == "array" then
+                    any(.modes[]?; .mode == "native")
+                  else
+                    ((.default_mode // "native") == "native")
+                  end
+                ),
+                runtime_native: (
+                  if (.modes | type) == "array" then
+                    any(.modes[]?; .mode == "native" and ((.has_runtime // false) == true))
+                  else
+                    (.has_runtime // false)
+                  end
+                )
+              }
+            | select(.supports_native)
+          ' "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-all.json" > "$OTA_MATRIX_ARTIFACT_DIR/ota-non-internal-native.jsonl"
+          while IFS= read -r task_line; do
+            task_name="$(jq -r '.name' <<<"$task_line")"
+            runtime_native="$(jq -r '.runtime_native' <<<"$task_line")"
+            echo ">>> [native] ${task_name} (runtime=${runtime_native})"
+            if [ "$runtime_native" = "true" ]; then
+              ota run --native --dry-run --json "$task_name" .
+            else
+              ota run --native --dry-run --json "$task_name" .
+            fi
+          done < "$OTA_MATRIX_ARTIFACT_DIR/ota-non-internal-native.jsonl"
+
+      - name: Dry-run all non-internal tasks (container coverage lane)
+        if: ${{ matrix.full_proof }}
+        timeout-minutes: 120
+        shell: bash
+        run: |
+          set -euo pipefail
+          ota tasks --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-all.json"
+          jq -c '
+            .tasks[]
+            | select((.internal // false) == false)
+            | {
+                name: .name,
+                supports_container: (
+                  if (.modes | type) == "array" then
+                    any(.modes[]?; .mode == "container")
+                  else
+                    ((.default_mode // "native") == "container")
+                  end
+                ),
+                runtime_container: (
+                  if (.modes | type) == "array" then
+                    any(.modes[]?; .mode == "container" and ((.has_runtime // false) == true))
+                  else
+                    (.has_runtime // false)
+                  end
+                )
+              }
+            | select(.supports_container)
+          ' "$OTA_MATRIX_ARTIFACT_DIR/ota-tasks-all.json" > "$OTA_MATRIX_ARTIFACT_DIR/ota-non-internal-container.jsonl"
+          while IFS= read -r task_line; do
+            task_name="$(jq -r '.name' <<<"$task_line")"
+            runtime_container="$(jq -r '.runtime_container' <<<"$task_line")"
+            echo ">>> [container] ${task_name} (runtime=${runtime_container})"
+            if [ "$runtime_container" = "true" ]; then
+              ota run --container --dry-run --json "$task_name" .
+            else
+              ota run --container --dry-run --json "$task_name" .
+            fi
+          done < "$OTA_MATRIX_ARTIFACT_DIR/ota-non-internal-container.jsonl"
+
+      - name: Proof Docker Compose runtime
+        if: ${{ matrix.full_proof && github.event_name == 'workflow_dispatch' && github.event.inputs.run_runtime_proof == 'true' }}
+        timeout-minutes: 60
+        shell: bash
+        run: |
+          ota clean . || true
+          set +e
+          ota proof runtime --workflow docker --native --ready-timeout 25m --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-docker.json"
+          status=$?
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-docker.json"
+          docker compose down --remove-orphans || true
+          ota clean . || true
+          exit "$status"
+
+      - name: Proof native app runtime
+        if: ${{ matrix.full_proof && github.event_name == 'workflow_dispatch' && github.event.inputs.run_runtime_proof == 'true' }}
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          ota clean . || true
+          set +e
+          ota proof runtime --workflow app --native --ready-timeout 25m --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app.json"
+          status=$?
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app.json"
+          ota clean . || true
+          exit "$status"
+
+      - name: Proof container app runtime
+        if: ${{ matrix.full_proof && github.event_name == 'workflow_dispatch' && github.event.inputs.run_runtime_proof == 'true' }}
+        timeout-minutes: 45
+        shell: bash
+        run: |
+          ota clean . || true
+          set +e
+          ota proof runtime --workflow app:container --container --ready-timeout 25m --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app-container.json"
+          status=$?
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-app-container.json"
+          ota clean . || true
+          exit "$status"
+
+      - name: Proof native production runtime
+        if: ${{ matrix.full_proof && github.event_name == 'workflow_dispatch' && github.event.inputs.run_runtime_proof == 'true' }}
+        timeout-minutes: 45
+        shell: bash
+        run: |
+          ota clean . || true
+          set +e
+          ota proof runtime --workflow prod --native --ready-timeout 25m --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-prod.json"
+          status=$?
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-prod.json"
+          ota clean . || true
+          exit "$status"
+
+      - name: Proof container production runtime
+        if: ${{ matrix.full_proof && github.event_name == 'workflow_dispatch' && github.event.inputs.run_runtime_proof == 'true' }}
+        timeout-minutes: 45
+        shell: bash
+        run: |
+          ota clean . || true
+          set +e
+          ota proof runtime --workflow prod:container --container --ready-timeout 25m --json . > "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-prod-container.json"
+          status=$?
+          cat "$OTA_MATRIX_ARTIFACT_DIR/ota-proof-prod-container.json"
+          ota clean . || true
+          exit "$status"
+
+      - name: Upload matrix artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ota-contract-matrix-${{ matrix.name }}
+          include-hidden-files: true
+          if-no-files-found: warn
+          path: |
+            ${{ env.OTA_MATRIX_ARTIFACT_DIR }}
+            .ota/proof/

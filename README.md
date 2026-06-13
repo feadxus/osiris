@@ -140,6 +140,23 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000)
 
+## Ota Readiness
+
+This repo ships with an Ota contract in [`ota.yaml`](ota.yaml). Use Ota 1.6.18 or newer to inspect, validate, and run the declared paths:
+
+```bash
+ota doctor
+ota validate
+ota tasks --use
+ota tasks --safe --use
+ota up --workflow app
+ota up --workflow app:container --container
+ota up --workflow prod
+ota up --workflow docker
+```
+
+The contract models the host-native app flow, the Ota-managed container flow, and the documented Docker Compose self-host path. It does not invent a test surface because this repo does not declare one.
+
 ### Docker / Self-Hosting
 
 ```bash
