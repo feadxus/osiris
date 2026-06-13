@@ -13,11 +13,13 @@ const orbitBtn = document.getElementById('orbitBtn');
 const DEG = Math.PI / 180;
 const TWO_PI = Math.PI * 2;
 const WORLD_TOPOJSON_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
+const US_STATES_TOPOJSON_URL = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json';
 
 const bootMessages = [
   'INITIALIZING GLOBAL INTELLIGENCE COMMAND...',
   'SYNCING ORBITAL LATTICE...',
   'LOADING TRUE EARTH GEOMETRY...',
+  'STAGING ADMIN BOUNDARIES...',
   'RECON LAYER ONLINE'
 ];
 
@@ -29,7 +31,7 @@ const bootTimer = window.setInterval(() => {
     window.clearInterval(bootTimer);
     window.setTimeout(() => boot?.classList.add('hide'), 450);
   }
-}, 340);
+}, 300);
 
 function pad(value) {
   return String(value).padStart(2, '0');
@@ -46,8 +48,9 @@ const palette = {
   ocean: '#283640',
   oceanDark: '#111923',
   land: '#05080a',
-  landEdge: 'rgba(176, 190, 198, 0.32)',
-  boundary: 'rgba(44, 139, 205, 0.42)'
+  landEdge: 'rgba(176, 190, 198, 0.34)',
+  country: 'rgba(73, 159, 219, 0.58)',
+  state: 'rgba(218, 184, 55, 0.72)'
 };
 
 const fallbackLand = [
@@ -60,8 +63,11 @@ const fallbackLand = [
   { name: 'AUSTRALIA', rings: [[[113,-12],[133,-10],[153,-24],[147,-39],[122,-38],[112,-28],[113,-12]]] }
 ];
 
-let worldLand = fallbackLand;
+let landMass = fallbackLand;
+let countryFeatures = [];
+let stateFeatures = [];
 let worldReady = false;
+let statesReady = false;
 
 const hubs = [
   { lat: 39.9, lon: -75.1 }, { lat: 40.7, lon: -74.0 }, { lat: 33.7, lon: -84.3 },
@@ -131,6 +137,9 @@ const state = {
   pointerId: null,
   lastX: 0,
   lastY: 0,
+  pointers: new Map(),
+  pinchStartDistance: 0,
+  pinchStartZoom: 1,
   showRoutes: true,
   lastTime: 0,
   activeLayer: 'recon'
@@ -150,6 +159,18 @@ function toneColor(tone, alpha = 1) {
   return map[tone] || map.green;
 }
 
+function detailLevel() {
+  const z = state.zoom;
+  return {
+    countryAlpha: clamp((z - 1.04) / 0.48, 0, 0.72),
+    stateAlpha: statesReady ? clamp((z - 1.68) / 0.72, 0, 0.82) : 0,
+    labelAlpha: clamp((z - 0.92) / 0.52, 0, 0.68),
+    fineGridAlpha: clamp((z - 1.55) / 0.62, 0, 0.28),
+    routeAlpha: clamp(1.28 - (z - 1) * 0.28, 0.22, 1),
+    nodeScale: clamp(1.16 - (z - 1) * 0.12, 0.72, 1.14)
+  };
+}
+
 function resize() {
   if (!canvas) return;
   state.dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -165,7 +186,8 @@ function resize() {
   state.cx = mobile ? state.width * 0.48 : state.width * 0.52;
   state.cy = mobile ? state.height * 0.50 : state.height * 0.53;
   const baseRadius = mobile ? state.width * 0.72 : Math.min(state.width, state.height) * 0.44;
-  state.radius = clamp(baseRadius * state.zoom, 220, Math.min(state.width, state.height) * 0.92);
+  const maxRadius = Math.max(state.width, state.height) * (mobile ? 1.62 : 1.34);
+  state.radius = clamp(baseRadius * state.zoom, 220, maxRadius);
 }
 
 function normalizeLon(lon) {
@@ -226,6 +248,7 @@ function drawPolyline(points, stroke, width = 1, fill = null, alpha = 1) {
 }
 
 function drawGrid() {
+  const lod = detailLevel();
   for (let lat = -60; lat <= 75; lat += 15) {
     const points = [];
     for (let lon = -180; lon <= 180; lon += 3) points.push([lon, lat]);
@@ -236,42 +259,69 @@ function drawGrid() {
     for (let lat = -80; lat <= 80; lat += 3) points.push([lon, lat]);
     drawPolyline(points, 'rgba(38, 132, 198, 0.14)', 0.75);
   }
-}
-
-function drawLand() {
-  const ctx = state.ctx;
-  for (const feature of worldLand) {
-    ctx.save();
-    ctx.beginPath();
-    let visible = 0;
-    for (const ring of feature.rings) {
-      visible += appendProjectedRing(ctx, ring);
+  if (lod.fineGridAlpha > 0) {
+    for (let lat = -75; lat <= 75; lat += 5) {
+      const points = [];
+      for (let lon = -180; lon <= 180; lon += 2) points.push([lon, lat]);
+      drawPolyline(points, `rgba(38, 132, 198, ${lod.fineGridAlpha})`, 0.36);
     }
-    if (visible > 2) {
-      ctx.fillStyle = palette.land;
-      ctx.strokeStyle = worldReady ? palette.landEdge : 'rgba(176, 190, 198, 0.22)';
-      ctx.lineWidth = worldReady ? 0.78 : 0.95;
-      ctx.fill('evenodd');
-      ctx.stroke();
+    for (let lon = -180; lon <= 180; lon += 5) {
+      const points = [];
+      for (let lat = -80; lat <= 80; lat += 2) points.push([lon, lat]);
+      drawPolyline(points, `rgba(38, 132, 198, ${lod.fineGridAlpha * 0.82})`, 0.34);
     }
-    ctx.restore();
   }
 }
 
-function drawCountryBoundaries() {
-  if (!worldReady) return;
+function drawFeatureFill(features, stroke, width = 0.8, fill = palette.land, alpha = 1) {
   const ctx = state.ctx;
   ctx.save();
-  ctx.strokeStyle = palette.boundary;
-  ctx.lineWidth = 0.45;
-  ctx.globalAlpha = 0.42;
-  for (const feature of worldLand) {
+  ctx.globalAlpha = alpha;
+  for (const feature of features) {
+    ctx.beginPath();
+    let visible = 0;
+    for (const ring of feature.rings) visible += appendProjectedRing(ctx, ring);
+    if (visible > 2) {
+      ctx.fillStyle = fill;
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = width;
+      ctx.fill('evenodd');
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function drawFeatureOutlines(features, stroke, width = 0.7, alpha = 1) {
+  if (!features.length || alpha <= 0) return;
+  const ctx = state.ctx;
+  ctx.save();
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = width;
+  ctx.globalAlpha = alpha;
+  ctx.shadowColor = stroke;
+  ctx.shadowBlur = width > 0.7 ? 5 : 2;
+  for (const feature of features) {
     ctx.beginPath();
     let visible = 0;
     for (const ring of feature.rings) visible += appendProjectedRing(ctx, ring);
     if (visible > 2) ctx.stroke();
   }
   ctx.restore();
+}
+
+function drawLand() {
+  drawFeatureFill(landMass, worldReady ? palette.landEdge : 'rgba(176, 190, 198, 0.22)', worldReady ? 0.82 : 0.95);
+}
+
+function drawAdminBoundaries() {
+  const lod = detailLevel();
+  if (lod.countryAlpha > 0) {
+    drawFeatureOutlines(countryFeatures, palette.country, 0.35 + state.zoom * 0.1, lod.countryAlpha);
+  }
+  if (lod.stateAlpha > 0) {
+    drawFeatureOutlines(stateFeatures, palette.state, 0.42 + state.zoom * 0.12, lod.stateAlpha);
+  }
 }
 
 function interpolateGreatCircle(a, b, steps = 90, altitude = 0.08) {
@@ -302,6 +352,7 @@ function interpolateGreatCircle(a, b, steps = 90, altitude = 0.08) {
 
 function drawRoute(a, b) {
   const ctx = state.ctx;
+  const lod = detailLevel();
   const points = interpolateGreatCircle(a, b, 80, 0.11);
   let drawing = false;
   let visible = 0;
@@ -322,6 +373,7 @@ function drawRoute(a, b) {
   }
   if (visible < 2) return;
   ctx.save();
+  ctx.globalAlpha = lod.routeAlpha;
   ctx.strokeStyle = 'rgba(25, 128, 205, 0.34)';
   ctx.lineWidth = 1.25;
   ctx.shadowColor = 'rgba(0, 174, 255, 0.24)';
@@ -337,20 +389,22 @@ function drawRoutes() {
 
 function drawNode(node) {
   const ctx = state.ctx;
+  const lod = detailLevel();
   const p = project(node.lat, node.lon, 1.015);
   if (!p.visible) return;
   const color = toneColor(node.tone, 1);
+  const size = node.size * lod.nodeScale;
   ctx.save();
   ctx.fillStyle = color;
   ctx.strokeStyle = 'rgba(4, 7, 10, 0.88)';
   ctx.lineWidth = 2;
   ctx.shadowColor = color;
-  ctx.shadowBlur = node.size > 6 ? 20 : 9;
+  ctx.shadowBlur = size > 5 ? 20 : 9;
   ctx.beginPath();
-  ctx.arc(p.x, p.y, node.size, 0, TWO_PI);
+  ctx.arc(p.x, p.y, size, 0, TWO_PI);
   ctx.fill();
   ctx.stroke();
-  if (node.label) {
+  if (node.label && state.zoom < 2.35) {
     ctx.shadowBlur = 8;
     ctx.font = '600 15px ui-monospace, SFMono-Regular, Menlo, monospace';
     ctx.lineWidth = 3;
@@ -367,6 +421,8 @@ function drawNodes() {
 }
 
 function drawLabels() {
+  const lod = detailLevel();
+  if (lod.labelAlpha <= 0) return;
   const labels = [
     { text: 'NORTH\nAMERICA', lat: 38, lon: -103, size: 28 },
     { text: 'EUROPE', lat: 50, lon: 14, size: 24 },
@@ -376,6 +432,7 @@ function drawLabels() {
   ];
   const ctx = state.ctx;
   ctx.save();
+  ctx.globalAlpha = lod.labelAlpha;
   ctx.fillStyle = 'rgba(221, 232, 239, 0.68)';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -384,11 +441,18 @@ function drawLabels() {
   for (const label of labels) {
     const p = project(label.lat, label.lon, 1.018);
     if (!p.visible) continue;
-    ctx.font = `800 ${label.size}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    const size = label.size * clamp(1.14 - (state.zoom - 1) * 0.16, 0.72, 1.12);
+    ctx.font = `800 ${size}px ui-monospace, SFMono-Regular, Menlo, monospace`;
     const lines = label.text.split('\n');
-    lines.forEach((line, index) => ctx.fillText(line, p.x, p.y + (index - (lines.length - 1) / 2) * (label.size + 2)));
+    lines.forEach((line, index) => ctx.fillText(line, p.x, p.y + (index - (lines.length - 1) / 2) * (size + 2)));
   }
   ctx.restore();
+}
+
+function drawDetailBadge() {
+  if (!readout) return;
+  const lodName = state.zoom >= 1.68 && statesReady ? 'STATE OUTLINES' : state.zoom >= 1.04 && worldReady ? 'COUNTRY OUTLINES' : 'CONTINENT COASTLINES';
+  readout.textContent = `${lodName} · Z ${state.zoom.toFixed(2)}`;
 }
 
 function drawGlobeBase() {
@@ -411,7 +475,7 @@ function drawGlobeBase() {
   ctx.clip();
   drawGrid();
   drawLand();
-  drawCountryBoundaries();
+  drawAdminBoundaries();
   drawRoutes();
   drawNodes();
   drawLabels();
@@ -446,13 +510,14 @@ function drawScene(time = 0) {
   const ctx = state.ctx;
   state.centerLon += (state.targetLon - state.centerLon) * 0.08;
   state.centerLat += (state.targetLat - state.centerLat) * 0.08;
-  if (!state.dragging) {
+  if (!state.dragging && state.pointers.size === 0 && state.zoom < 1.45) {
     state.targetLon = normalizeLon(state.targetLon + 0.018);
   }
 
   ctx.clearRect(0, 0, state.width, state.height);
   drawOuterOrbit(time);
   drawGlobeBase();
+  drawDetailBadge();
 
   state.lastTime = time;
   window.requestAnimationFrame(drawScene);
@@ -508,32 +573,57 @@ function topoGeometryToRings(topology, geometry) {
   return [];
 }
 
+function topoObjectToFeatures(topology, object, fallbackName = 'feature') {
+  if (!object) return [];
+  const geometries = object.type === 'GeometryCollection' ? object.geometries : [object];
+  return geometries
+    .map((geometry, index) => ({
+      name: geometry.properties?.name || geometry.id || `${fallbackName}-${index}`,
+      rings: topoGeometryToRings(topology, geometry)
+    }))
+    .filter((feature) => feature.rings.length);
+}
+
 async function loadWorldGeometry() {
   try {
     const response = await fetch(WORLD_TOPOJSON_URL, { cache: 'force-cache' });
     if (!response.ok) throw new Error(`World geometry request failed: ${response.status}`);
     const topology = await response.json();
-    const geometries = topology.objects?.countries?.geometries || [];
-    const countries = geometries
-      .map((geometry) => ({
-        name: geometry.properties?.name || geometry.id || 'land',
-        rings: topoGeometryToRings(topology, geometry)
-      }))
-      .filter((feature) => feature.rings.length);
+    const land = topoObjectToFeatures(topology, topology.objects?.land, 'land');
+    const countries = topoObjectToFeatures(topology, topology.objects?.countries, 'country');
 
     if (!countries.length) throw new Error('World geometry contained no country rings.');
 
-    worldLand = countries;
+    landMass = land.length ? land : countries;
+    countryFeatures = countries;
     worldReady = true;
     if (eventTitle) eventTitle.textContent = 'TRUE EARTH GEOMETRY ONLINE';
-    if (eventMeta) eventMeta.textContent = 'COUNTRY COASTLINES · WORLD ATLAS 110M';
-    if (readout) readout.textContent = 'REAL COASTLINES · RECON';
+    if (eventMeta) eventMeta.textContent = 'COASTLINES · COUNTRY OUTLINES · ZOOM FOR STATE DETAIL';
   } catch (error) {
     console.warn(error);
-    worldLand = fallbackLand;
+    landMass = fallbackLand;
+    countryFeatures = [];
     worldReady = false;
     if (eventTitle) eventTitle.textContent = 'FALLBACK GEOMETRY ONLINE';
     if (eventMeta) eventMeta.textContent = 'NETWORK MAP DATA UNAVAILABLE · USING LOCAL ROUGH SHAPES';
+  }
+}
+
+async function loadStateGeometry() {
+  try {
+    const response = await fetch(US_STATES_TOPOJSON_URL, { cache: 'force-cache' });
+    if (!response.ok) throw new Error(`State geometry request failed: ${response.status}`);
+    const topology = await response.json();
+    const states = topoObjectToFeatures(topology, topology.objects?.states, 'state');
+    if (!states.length) throw new Error('State geometry contained no rings.');
+    stateFeatures = states;
+    statesReady = true;
+    if (eventMeta) eventMeta.textContent = 'COUNTRY OUTLINES · U.S. STATE OUTLINES ENABLED ABOVE Z 1.68';
+  } catch (error) {
+    console.warn(error);
+    stateFeatures = [];
+    statesReady = false;
+    if (eventMeta && worldReady) eventMeta.textContent = 'COUNTRY OUTLINES ONLINE · STATE DATA UNAVAILABLE';
   }
 }
 
@@ -544,38 +634,89 @@ function resetView() {
   resize();
 }
 
+function pointerDistance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function updatePinchBaseline() {
+  const points = [...state.pointers.values()];
+  if (points.length >= 2) {
+    state.pinchStartDistance = pointerDistance(points[0], points[1]) || 1;
+    state.pinchStartZoom = state.zoom;
+  }
+}
+
 function bindControls() {
   if (!canvas) return;
+
   canvas.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    state.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    canvas.setPointerCapture(event.pointerId);
+
+    if (state.pointers.size >= 2) {
+      state.dragging = false;
+      state.pointerId = null;
+      updatePinchBaseline();
+      return;
+    }
+
     state.dragging = true;
     state.pointerId = event.pointerId;
     state.lastX = event.clientX;
     state.lastY = event.clientY;
-    canvas.setPointerCapture(event.pointerId);
   });
 
   canvas.addEventListener('pointermove', (event) => {
+    if (!state.pointers.has(event.pointerId)) return;
+    event.preventDefault();
+    state.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (state.pointers.size >= 2) {
+      const points = [...state.pointers.values()];
+      const distance = pointerDistance(points[0], points[1]) || 1;
+      const ratio = distance / (state.pinchStartDistance || distance);
+      state.zoom = clamp(state.pinchStartZoom * ratio, 0.74, 4.2);
+      resize();
+      if (eventTitle) eventTitle.textContent = state.zoom >= 1.68 ? 'ADMIN DETAIL MODE' : state.zoom >= 1.04 ? 'COUNTRY BORDER MODE' : 'CONTINENT VIEW';
+      return;
+    }
+
     if (!state.dragging || state.pointerId !== event.pointerId) return;
     const dx = event.clientX - state.lastX;
     const dy = event.clientY - state.lastY;
-    state.targetLon = normalizeLon(state.targetLon - dx * 0.22);
-    state.targetLat = clamp(state.targetLat + dy * 0.18, -62, 72);
+    const dragScale = clamp(0.24 / Math.sqrt(state.zoom), 0.08, 0.24);
+    state.targetLon = normalizeLon(state.targetLon - dx * dragScale);
+    state.targetLat = clamp(state.targetLat + dy * dragScale * 0.82, -72, 78);
     state.lastX = event.clientX;
     state.lastY = event.clientY;
-    if (readout) readout.textContent = `${state.targetLat.toFixed(1)}° · ${normalizeLon(state.targetLon).toFixed(1)}°`;
   });
 
-  function endDrag(event) {
+  function endPointer(event) {
+    state.pointers.delete(event.pointerId);
     if (state.pointerId === event.pointerId) {
       state.dragging = false;
       state.pointerId = null;
     }
+    if (state.pointers.size === 1) {
+      const [remainingId, remaining] = state.pointers.entries().next().value;
+      state.pointerId = remainingId;
+      state.dragging = true;
+      state.lastX = remaining.x;
+      state.lastY = remaining.y;
+    } else if (state.pointers.size >= 2) {
+      updatePinchBaseline();
+    }
   }
-  canvas.addEventListener('pointerup', endDrag);
-  canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+  canvas.addEventListener('lostpointercapture', endPointer);
+
   canvas.addEventListener('wheel', (event) => {
     event.preventDefault();
-    state.zoom = clamp(state.zoom + (event.deltaY > 0 ? -0.08 : 0.08), 0.74, 1.42);
+    const delta = event.deltaY > 0 ? -0.12 : 0.12;
+    state.zoom = clamp(state.zoom + delta * Math.max(1, state.zoom * 0.62), 0.74, 4.2);
+    if (eventTitle) eventTitle.textContent = state.zoom >= 1.68 ? 'ADMIN DETAIL MODE' : state.zoom >= 1.04 ? 'COUNTRY BORDER MODE' : 'CONTINENT VIEW';
     resize();
   }, { passive: false });
 
@@ -592,13 +733,21 @@ function bindControls() {
       button.classList.add('active');
       state.activeLayer = button.dataset.layer || 'recon';
       if (eventTitle) eventTitle.textContent = `${state.activeLayer.toUpperCase()} LAYER SELECTED`;
-      if (eventMeta) eventMeta.textContent = worldReady ? 'TRUE COASTLINES · LIVE ROUTES · SENSOR CLUSTERS' : 'LOCAL GEOMETRY · LIVE ROUTES · SENSOR CLUSTERS';
+      if (eventMeta) eventMeta.textContent = worldReady ? 'ZOOM LEVEL CONTROLS BORDER DETAIL · PINCH TO INSPECT' : 'LOCAL GEOMETRY · LIVE ROUTES · SENSOR CLUSTERS';
     });
   });
 
   window.addEventListener('keydown', (event) => {
     if (event.key.toLowerCase() === 'r') resetView();
     if (event.key.toLowerCase() === 'o') orbitBtn?.click();
+    if (event.key === '+' || event.key === '=') {
+      state.zoom = clamp(state.zoom + 0.18, 0.74, 4.2);
+      resize();
+    }
+    if (event.key === '-' || event.key === '_') {
+      state.zoom = clamp(state.zoom - 0.18, 0.74, 4.2);
+      resize();
+    }
   });
 
   window.addEventListener('resize', resize);
@@ -606,5 +755,5 @@ function bindControls() {
 
 resize();
 bindControls();
-loadWorldGeometry();
+Promise.allSettled([loadWorldGeometry(), loadStateGeometry()]);
 window.requestAnimationFrame(drawScene);
