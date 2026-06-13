@@ -43,7 +43,7 @@ export interface AuthToken {
 
 // ── Constants ──
 
-const JWT_SECRET=*** || crypto.randomBytes(64).toString('hex');
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
 const JWT_EXPIRY = '7d';
 const USERS_DIR = process.env.USERS_DIR || '/app/data/users';
 const USERS_FILE = path.join(USERS_DIR, 'users.json');
