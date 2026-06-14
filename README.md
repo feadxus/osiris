@@ -182,6 +182,14 @@ Zero-dependency JWT authentication with **viewer / analyst / admin** tiers, per-
 ### 12. Interactive Link Editor (Manual Link Analysis)
 A React Flow canvas added to the Personal Ontology Graph (and reused by the Admin Console): typed draggable nodes, drag-to-connect relationships, and a one-click map LOCATE — bringing hands-on link analysis alongside the auto-layout force graph.
 
+### 13. Plugin System (Hot-Loadable Third-Party Extensions)
+A declarative, **manifest-based plugin API** that extends a running OSIRIS instance without rebuilding the core. A plugin is a JSON manifest — never arbitrary code — so it can be installed, enabled, disabled, and uninstalled live from the admin **Plugin Console**. Three kinds:
+- **data-source** — polls an external endpoint (SSRF-guarded via `safeFetch`) and uses a declarative field-mapping to transform the response into `PolybolosEntity[]`, merged into the same SDK Common Operating Picture the ingest webhook feeds.
+- **visualization** — contributes a sandboxed `iframe` widget or a map `entity-layer` fed by a data-source plugin.
+- **ai-pipeline** — a chain of prompt steps executed against the DeepSeek engine, each step's output threaded into the next via `{{stepId}}` / `{{input}}` interpolation.
+
+Manifests are validated on install, persisted to a JSON store (`PLUGINS_DIR`), and managed at `/api/plugins`. All mutations and executions require the **admin** role; the console ships starter templates for each kind. Implemented in `src/lib/plugins/` (`types.ts`, `registry.ts`, `runtime.ts`) with the `PluginPanel` UI.
+
 ---
 
 ## Features Overview
@@ -412,27 +420,25 @@ docker builder prune -af
 
 3. **Threat scoring engine** — ML-based scoring that weighs entity proximity, temporal recency, severity distribution, and cross-source correlation into a single threat score per entity/region.
 
-4. **Plugin system** — Third-party plugin API for custom data sources, visualization modules, and AI pipelines — hot-loadable without rebuilding the core.
+4. **Advanced graph analytics** — Community detection (Louvain/Leiden), centrality scoring, pathfinding between entities in the ontology graph — identify hidden connections.
 
-5. **Advanced graph analytics** — Community detection (Louvain/Leiden), centrality scoring, pathfinding between entities in the ontology graph — identify hidden connections.
+5. **Natural language search** — Full-text + semantic search across all intelligence layers, ontology entities, and ingested data — "show me all flights near this phone number's location in the last 24 hours".
 
-6. **Natural language search** — Full-text + semantic search across all intelligence layers, ontology entities, and ingested data — "show me all flights near this phone number's location in the last 24 hours".
+6. **Automated OSINT playbooks** — Triggerable sequences of RECON toolkit operations with conditional branching — e.g., "when a new phone number is ingested, run OSINT sweep on it, cross-check against sanctions, and create an Intel Pin".
 
-7. **Automated OSINT playbooks** — Triggerable sequences of RECON toolkit operations with conditional branching — e.g., "when a new phone number is ingested, run OSINT sweep on it, cross-check against sanctions, and create an Intel Pin".
+7. **Historical timeline playback** — Record and replay entity movements (flights, vessels) with a scrubable timeline — reconstruct past events from cached geospatial data.
 
-8. **Historical timeline playback** — Record and replay entity movements (flights, vessels) with a scrubable timeline — reconstruct past events from cached geospatial data.
+8. **Dark web monitoring integration** — Tor/onion scanner module for surface-level dark web OSINT, with automatic entity extraction and linkage to the ontology graph.
 
-9. **Dark web monitoring integration** — Tor/onion scanner module for surface-level dark web OSINT, with automatic entity extraction and linkage to the ontology graph.
+9. **Geofence alerts** — Define geographic boundaries that trigger alerts when aircraft, vessels, or tracked entities enter/exit — with notification delivery via Telegram, email, or webhook.
 
-10. **Geofence alerts** — Define geographic boundaries that trigger alerts when aircraft, vessels, or tracked entities enter/exit — with notification delivery via Telegram, email, or webhook.
+10. **Federated OSINT sharing** — Peer-to-peer sharing of anonymized intelligence between OSIRIS instances with cryptographic attestation and reputation scoring.
 
-11. **Federated OSINT sharing** — Peer-to-peer sharing of anonymized intelligence between OSIRIS instances with cryptographic attestation and reputation scoring.
+11. **Mobile companion app** — React Native or PWA frontend for field operations — camera-based document scanning, GPS tagging, push alerts.
 
-12. **Mobile companion app** — React Native or PWA frontend for field operations — camera-based document scanning, GPS tagging, push alerts.
+12. **SOC/IDS integration** — Connect to SIEM platforms (Splunk, Elastic) or IDS (Suricata, Zeek) to overlay network security events on the geospatial dashboard — map IP-based threats to physical locations.
 
-13. **SOC/IDS integration** — Connect to SIEM platforms (Splunk, Elastic) or IDS (Suricata, Zeek) to overlay network security events on the geospatial dashboard — map IP-based threats to physical locations.
-
-14. **LLM fine-tuning** — Train a domain-specific model on OSINT report corpora for improved entity extraction, relationship inference, and false-positive reduction in the ontology engine.
+13. **LLM fine-tuning** — Train a domain-specific model on OSINT report corpora for improved entity extraction, relationship inference, and false-positive reduction in the ontology engine.
 
 ---
 
