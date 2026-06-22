@@ -1,3 +1,6 @@
+OSIRIS'in Türkçe lokalizasyonu. Orijinal: https://github.com/simplifaisoul/osiris
+
+
 <div align="center">
 
 # ⬡ OSIRIS
