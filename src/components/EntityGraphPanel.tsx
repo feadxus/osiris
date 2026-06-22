@@ -8,6 +8,7 @@ import {
   Plane, Ship, Building2, User, Globe, Newspaper, ShieldAlert,
   RefreshCw, Network, Wifi
 } from 'lucide-react';
+import { useLanguage } from '@/lib/i18n';
 
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { ssr: false });
 
@@ -51,6 +52,7 @@ interface Props {
 }
 
 function EntityGraphPanel({ entity, onClose }: Props) {
+  const { t } = useLanguage();
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -237,7 +239,7 @@ function EntityGraphPanel({ entity, onClose }: Props) {
         <div className="flex items-center justify-between px-6 py-3 border-b border-[var(--border-primary)] bg-[var(--gold-primary)]/5 relative z-20">
           <div className="flex items-center gap-3">
             <div className="w-1.5 h-1.5 bg-[var(--gold-primary)] animate-osiris-pulse shadow-[0_0_8px_var(--gold-primary)]" />
-            <span className="text-[12px] font-mono font-bold tracking-[0.2em] text-[var(--gold-primary)]">[ OSIRIS // ENTITY INTEL ]</span>
+            <span className="text-[12px] font-mono font-bold tracking-[0.2em] text-[var(--gold-primary)]">{t('entityGraph.header')}</span>
             {loading && <Loader2 className="w-3.5 h-3.5 text-[var(--gold-primary)] animate-spin" />}
           </div>
           <div className="flex items-center gap-2">
@@ -255,12 +257,12 @@ function EntityGraphPanel({ entity, onClose }: Props) {
           <div className="px-6 py-2 border-b border-[var(--border-primary)] flex items-center gap-3 bg-black/20 relative z-20">
             {(() => { const I = TYPE_ICONS[entity.type] || Globe; return <I className="w-4 h-4" style={{ color: TYPE_COLORS[entity.type] }} />; })()}
             <span className="text-xs font-mono text-white/90 tracking-widest uppercase truncate">{entity.label || entity.id}</span>
-            <span className="text-[10px] font-mono text-[var(--gold-primary)]/70 ml-auto tracking-widest">{graphData.nodes.length} NODES // {graphData.links.length} LINKS</span>
+            <span className="text-[10px] font-mono text-[var(--gold-primary)]/70 ml-auto tracking-widest">{graphData.nodes.length} {t('entityGraph.nodesLinks')}</span>
           </div>
         ) : (
           <div className="px-6 py-3 border-b border-[var(--border-primary)] flex items-center gap-3 bg-black/20 relative z-20">
             <Network className="w-4 h-4 text-[var(--gold-primary)]/50 animate-osiris-pulse" />
-            <span className="text-xs font-mono text-[var(--gold-primary)]/50 tracking-widest uppercase truncate typewriter">[ AWAITING TARGET LOCK ]</span>
+            <span className="text-xs font-mono text-[var(--gold-primary)]/50 tracking-widest uppercase truncate typewriter">{t('entityGraph.awaitingTargetLock')}</span>
           </div>
         )}
 
@@ -268,7 +270,7 @@ function EntityGraphPanel({ entity, onClose }: Props) {
         {error && (
           <div className="px-6 py-2 bg-[#FF1744]/10 border-b border-[#FF1744]/30 flex items-center gap-2 relative z-20 shadow-[inset_0_0_15px_rgba(255,23,68,0.2)]">
             <AlertTriangle className="w-3.5 h-3.5 text-[#FF1744]" />
-            <span className="text-[10px] font-mono font-bold tracking-widest text-[#FF1744] uppercase">[ ERR: {error} ]</span>
+            <span className="text-[10px] font-mono font-bold tracking-widest text-[#FF1744] uppercase">{t('entityGraph.error', { error })}</span>
           </div>
         )}
 
@@ -289,7 +291,7 @@ function EntityGraphPanel({ entity, onClose }: Props) {
           )}
           {graphData.nodes.length === 0 && !loading && (
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-xs font-mono text-white/30">No graph data yet</span>
+              <span className="text-xs font-mono text-white/30">{t('entityGraph.noGraphData')}</span>
             </div>
           )}
         </div>
@@ -309,7 +311,7 @@ function EntityGraphPanel({ entity, onClose }: Props) {
                 </div>
                 <span className="text-[10px] font-mono font-bold px-2 py-0.5 border"
                   style={{ color: TYPE_COLORS[selectedNode.type], borderColor: `${TYPE_COLORS[selectedNode.type]}80`, background: `${TYPE_COLORS[selectedNode.type]}15`, textShadow: `0 0 5px ${TYPE_COLORS[selectedNode.type]}` }}>
-                  [{selectedNode.type.toUpperCase()}]
+                  [{t(`entityGraph.types.${selectedNode.type}`) || selectedNode.type.toUpperCase()}]
                 </span>
               </div>
               {selectedNode.properties && Object.keys(selectedNode.properties).length > 0 && (
@@ -333,7 +335,7 @@ function EntityGraphPanel({ entity, onClose }: Props) {
                   expandEntity(selectedNode.type, rawId);
                 }} className="btn-tactical w-full mt-4 flex items-center justify-center gap-2" disabled={loading}>
                   {loading ? <Loader2 className="w-3.5 h-3.5 text-[var(--gold-primary)] animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 text-[var(--gold-primary)]" />}
-                  <span className="text-[11px] font-mono font-bold text-[var(--gold-primary)] tracking-[0.2em]">[ ACQUIRE TARGET DATA ]</span>
+                  <span className="text-[11px] font-mono font-bold text-[var(--gold-primary)] tracking-[0.2em]">{t('entityGraph.acquireTarget')}</span>
                 </button>
               )}
             </motion.div>
@@ -342,10 +344,10 @@ function EntityGraphPanel({ entity, onClose }: Props) {
 
         {/* LEGEND */}
         <div className="px-4 py-2 border-t border-white/5 flex items-center gap-3 flex-wrap">
-          {Object.entries(TYPE_COLORS).map(([t, c]) => (
-            <div key={t} className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full" style={{ background: c }} />
-              <span className="text-[8px] font-mono text-white/40 uppercase">{t}</span>
+          {Object.entries(TYPE_COLORS).map(([type, color]) => (
+            <div key={type} className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full" style={{ background: color }} />
+              <span className="text-[8px] font-mono text-white/40 uppercase">{t(`entityGraph.types.${type}`) || type}</span>
             </div>
           ))}
         </div>
