@@ -7,6 +7,7 @@ import {
   CloudLightning, Radiation, Tv, Anchor, Ship, Newspaper,
   Network, Share2, Radio, Mountain
 } from 'lucide-react';
+import { useLanguage } from '@/lib/i18n';
 
 interface LayerPanelProps {
   data: any;
@@ -17,7 +18,7 @@ interface LayerPanelProps {
   setTheme?: (theme: 'core' | 'ghost') => void;
 }
 
-const getLayerGroups = (theme: 'core' | 'ghost') => {
+const getLayerGroups = (t: (key: string) => string, theme: 'core' | 'ghost') => {
   const isGhost = theme === 'ghost';
   const phantomPurple = '#B388FF';
   const ghostPriv = '#CE93D8';
@@ -30,91 +31,90 @@ const getLayerGroups = (theme: 'core' | 'ghost') => {
 
   return [
   {
-    label: 'SDK',
-    fullLabel: 'OSIRIS SDK',
+    label: t('layerPanel.groups.sdk'),
+    fullLabel: t('layerPanel.groups.sdkFull'),
     color: '#1565C0',
     layers: [
-      { key: 'sdk_sea', label: 'Maritime Lines', icon: Anchor, color: '#4FC3F7', dataKey: 'sdk_entities' },
-      { key: 'sdk_ransomware', label: 'Ransomware Feed', icon: AlertTriangle, color: '#D32F2F', dataKey: 'sdk_entities' },
+      { key: 'sdk_sea', label: t('layerPanel.layers.maritimeLines'), icon: Anchor, color: '#4FC3F7', dataKey: 'sdk_entities' },
+      { key: 'sdk_ransomware', label: t('layerPanel.layers.ransomwareFeed'), icon: AlertTriangle, color: '#D32F2F', dataKey: 'sdk_entities' },
     ],
   },
   {
-    label: 'AVIATION',
-    fullLabel: 'AVIATION',
+    label: t('layerPanel.groups.aviation'),
+    fullLabel: t('layerPanel.groups.aviation'),
     color: flightCom,
     layers: [
-      { key: 'flights', label: 'Commercial', icon: Plane, color: flightCom, dataKey: 'commercial_flights' },
-      { key: 'private', label: 'Private', icon: Plane, color: flightPriv, dataKey: 'private_flights' },
-      { key: 'jets', label: 'Private Jets', icon: Plane, color: flightGov, dataKey: 'private_jets' },
-      { key: 'military', label: 'Military', icon: Shield, color: flightMil, dataKey: 'military_flights' },
+      { key: 'flights', label: t('layerPanel.layers.commercial'), icon: Plane, color: flightCom, dataKey: 'commercial_flights' },
+      { key: 'private', label: t('layerPanel.layers.private'), icon: Plane, color: flightPriv, dataKey: 'private_flights' },
+      { key: 'jets', label: t('layerPanel.layers.privateJets'), icon: Plane, color: flightGov, dataKey: 'private_jets' },
+      { key: 'military', label: t('layerPanel.layers.military'), icon: Shield, color: flightMil, dataKey: 'military_flights' },
     ],
   },
   {
-    label: 'MARITIME',
-    fullLabel: 'MARITIME',
+    label: t('layerPanel.groups.maritime'),
+    fullLabel: t('layerPanel.groups.maritime'),
     color: '#26C6DA',
     layers: [
-      { key: 'maritime', label: 'Maritime / Naval', icon: Ship, color: '#26C6DA', dataKey: 'maritime_ships,maritime_ports,maritime_chokepoints' },
+      { key: 'maritime', label: t('layerPanel.layers.maritimeNaval'), icon: Ship, color: '#26C6DA', dataKey: 'maritime_ships,maritime_ports,maritime_chokepoints' },
     ],
   },
   {
-    label: 'SPACE',
-    fullLabel: 'SPACE TRACKING',
+    label: t('layerPanel.groups.space'),
+    fullLabel: t('layerPanel.groups.spaceFull'),
     color: '#D4AF37',
     layers: [
-      { key: 'satellites', label: 'All Satellites', icon: Satellite, color: '#D4AF37', dataKey: 'satellites' },
-      { key: 'sat_comms', label: 'Starlink / Comms', icon: Satellite, color: '#00E676', dataKey: 'satellites', catKey: 'comms' },
-      { key: 'sat_military', label: 'Military / Intel', icon: Satellite, color: '#FF3D3D', dataKey: 'satellites', catKey: 'military' },
-      { key: 'sat_navigation', label: 'GPS / Navigation', icon: Satellite, color: '#448AFF', dataKey: 'satellites', catKey: 'navigation' },
-      { key: 'sat_earth', label: 'Earth Observation', icon: Satellite, color: '#90EE90', dataKey: 'satellites', catKey: 'earth_obs' },
-      { key: 'sat_science', label: 'Stations / Telescopes', icon: Satellite, color: '#FFD700', dataKey: 'satellites', catKey: 'science' },
+      { key: 'satellites', label: t('layerPanel.layers.allSatellites'), icon: Satellite, color: '#D4AF37', dataKey: 'satellites' },
+      { key: 'sat_comms', label: t('layerPanel.layers.starlinkComms'), icon: Satellite, color: '#00E676', dataKey: 'satellites', catKey: 'comms' },
+      { key: 'sat_military', label: t('layerPanel.layers.militaryIntel'), icon: Satellite, color: '#FF3D3D', dataKey: 'satellites', catKey: 'military' },
+      { key: 'sat_navigation', label: t('layerPanel.layers.gpsNavigation'), icon: Satellite, color: '#448AFF', dataKey: 'satellites', catKey: 'navigation' },
+      { key: 'sat_earth', label: t('layerPanel.layers.earthObservation'), icon: Satellite, color: '#90EE90', dataKey: 'satellites', catKey: 'earth_obs' },
+      { key: 'sat_science', label: t('layerPanel.layers.stationsTelescopes'), icon: Satellite, color: '#FFD700', dataKey: 'satellites', catKey: 'science' },
     ],
   },
   {
-    label: 'SURVEIL',
-    fullLabel: 'SURVEILLANCE',
+    label: t('layerPanel.groups.surveil'),
+    fullLabel: t('layerPanel.groups.surveilFull'),
     color: '#7E57C2',
     layers: [
-      { key: 'cctv', label: 'CCTV Cameras', icon: Camera, color: '#7E57C2', dataKey: 'cameras' },
-      { key: 'live_news', label: 'Live News Feeds', icon: Tv, color: '#EC407A', dataKey: 'live_feeds' },
+      { key: 'cctv', label: t('layerPanel.layers.cctvCameras'), icon: Camera, color: '#7E57C2', dataKey: 'cameras' },
+      { key: 'live_news', label: t('layerPanel.layers.liveNewsFeeds'), icon: Tv, color: '#EC407A', dataKey: 'live_feeds' },
     ],
   },
   {
-    label: 'HAZARD',
-    fullLabel: 'NATURAL HAZARDS',
+    label: t('layerPanel.groups.hazard'),
+    fullLabel: t('layerPanel.groups.hazardFull'),
     color: '#F9A825',
     layers: [
-      { key: 'earthquakes', label: 'Earthquakes (24h)', icon: Activity, color: '#F9A825', dataKey: 'earthquakes' },
-      { key: 'fires', label: 'Active Fires', icon: Flame, color: '#E65100', dataKey: 'fires' },
-      { key: 'weather', label: 'Severe Weather', icon: CloudLightning, color: '#7E57C2', dataKey: 'weather_events' },
+      { key: 'earthquakes', label: t('layerPanel.layers.earthquakes'), icon: Activity, color: '#F9A825', dataKey: 'earthquakes' },
+      { key: 'fires', label: t('layerPanel.layers.activeFires'), icon: Flame, color: '#E65100', dataKey: 'fires' },
+      { key: 'weather', label: t('layerPanel.layers.severeWeather'), icon: CloudLightning, color: '#7E57C2', dataKey: 'weather_events' },
     ],
   },
   {
-    label: 'THREAT',
-    fullLabel: 'THREATS & INFRA',
+    label: t('layerPanel.groups.threat'),
+    fullLabel: t('layerPanel.groups.threatFull'),
     color: '#D32F2F',
     layers: [
-      { key: 'infrastructure', label: 'Nuclear Facilities', icon: Radiation, color: '#26A69A', dataKey: 'infrastructure' },
-      { key: 'global_incidents', label: 'Global Incidents', icon: AlertTriangle, color: '#D32F2F', dataKey: 'gdelt' },
-      { key: 'gps_jamming', label: 'GPS Jamming', icon: Radio, color: '#D32F2F', dataKey: 'gps_jamming' },
+      { key: 'infrastructure', label: t('layerPanel.layers.nuclearFacilities'), icon: Radiation, color: '#26A69A', dataKey: 'infrastructure' },
+      { key: 'global_incidents', label: t('layerPanel.layers.globalIncidents'), icon: AlertTriangle, color: '#D32F2F', dataKey: 'gdelt' },
+      { key: 'gps_jamming', label: t('layerPanel.layers.gpsJamming'), icon: Radio, color: '#D32F2F', dataKey: 'gps_jamming' },
     ],
   },
   {
-    label: 'NETWORK',
-    fullLabel: 'NETWORK INTEL',
+    label: t('layerPanel.groups.network'),
+    fullLabel: t('layerPanel.groups.networkFull'),
     color: '#D32F2F',
     layers: [
-
-      { key: 'malware', label: 'Live Malware', icon: AlertTriangle, color: '#D32F2F', dataKey: 'malware_threats' },
+      { key: 'malware', label: t('layerPanel.layers.liveMalware'), icon: AlertTriangle, color: '#D32F2F', dataKey: 'malware_threats' },
     ],
   },
   {
-    label: 'DISPLAY',
-    fullLabel: 'DISPLAY',
+    label: t('layerPanel.groups.display'),
+    fullLabel: t('layerPanel.groups.display'),
     color: '#448AFF',
     layers: [
-      { key: 'day_night', label: 'Day / Night Cycle', icon: Sun, color: '#448AFF', dataKey: '' },
-      { key: 'terrain_3d', label: '3D Terrain & Buildings', icon: Mountain, color: '#8D6E63', dataKey: '' },
+      { key: 'day_night', label: t('layerPanel.layers.dayNightCycle'), icon: Sun, color: '#448AFF', dataKey: '' },
+      { key: 'terrain_3d', label: t('layerPanel.layers.terrain3d'), icon: Mountain, color: '#8D6E63', dataKey: '' },
     ],
   },
   ];
@@ -131,8 +131,9 @@ function Shield(props: any) {
 
 function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'core', setTheme }: LayerPanelProps) {
   const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
+  const { t } = useLanguage();
 
-  const LAYER_GROUPS = getLayerGroups(theme);
+  const LAYER_GROUPS = getLayerGroups(t, theme);
   const ALL_LAYERS = LAYER_GROUPS.flatMap(g => g.layers);
 
   const toggle = (key: string) => setActiveLayers((prev: any) => ({ ...prev, [key]: !prev[key] }));
@@ -175,7 +176,7 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
                     key={layer.key}
                     onClick={() => {
                       if (layer.key === 'sdk_ransomware') {
-                        alert('Ransomware Feed - Coming Soon');
+                        alert(t('layerPanel.comingSoon'));
                       } else {
                         toggle(layer.key);
                       }
@@ -211,7 +212,7 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
         {setTheme && (
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-[var(--border-primary)] px-2">
             <div className="text-[10px] font-bold font-mono tracking-widest text-[var(--text-secondary)]">
-              GHOST MODE
+              {t('layerPanel.ghostMode')}
             </div>
             <button
               onClick={() => setTheme(theme === 'core' ? 'ghost' : 'core')}
@@ -310,7 +311,7 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
                             key={layer.key}
                             onClick={() => {
                               if (layer.key === 'sdk_ransomware') {
-                                alert('Ransomware Feed - Coming Soon');
+                                alert(t('layerPanel.comingSoon'));
                               } else {
                                 toggle(layer.key);
                               }
@@ -344,7 +345,7 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
       {/* DESKTOP THEME TOGGLE */}
       {setTheme && (
         <div className="mt-auto px-2 pt-6 pb-2 border-t border-[var(--border-primary)] flex flex-col items-center gap-3 relative z-50">
-          <div className="text-[9px] font-mono tracking-[0.25em] text-[var(--text-secondary)]">GHOST PROTOCOL</div>
+          <div className="text-[9px] font-mono tracking-[0.25em] text-[var(--text-secondary)]">{t('layerPanel.ghostProtocol')}</div>
           <button
             onClick={() => setTheme(theme === 'core' ? 'ghost' : 'core')}
             className="relative w-14 h-7 rounded-full transition-all duration-500 ease-in-out border flex items-center px-1 cursor-pointer hover:shadow-lg"

@@ -12,31 +12,12 @@ import {
   Maximize2, Minimize2, Gavel, Bitcoin, Phone, Terminal, ShieldAlert
 } from 'lucide-react';
 import { ipToNumber, numberToIp, calculateSubnetStart, classifyDevice, assessRisk, batchFetch, ShodanInternetDBResponse, SweepDevice } from '@/lib/osint-utils';
-
-const TABS = [
-  { id: 'scanner', label: 'PORT SCAN', icon: Radar, placeholder: 'IP or hostname', color: '#00E5FF' },
-  { id: 'vuln', label: 'VULN SWEEP', icon: Bug, placeholder: 'IP or hostname', color: '#FF3D3D' },
-
-  { id: 'dns', label: 'DNS', icon: Server, placeholder: 'Domain name', color: '#448AFF' },
-  { id: 'whois', label: 'WHOIS', icon: FileText, placeholder: 'Domain name', color: '#FFD700' },
-  { id: 'certs', label: 'CERTS', icon: Lock, placeholder: 'Domain name', color: '#E040FB' },
-  { id: 'threats', label: 'THREATS', icon: AlertTriangle, placeholder: 'IP, domain, or hash', color: '#FF9500' },
-  { id: 'headers', label: 'HEADERS', icon: Code, placeholder: 'URL to inspect', color: '#87CEEB' },
-  { id: 'ssl', label: 'SSL/TLS', icon: Shield, placeholder: 'Domain name', color: '#76FF03' },
-  { id: 'subdomains', label: 'SUBDOMAINS', icon: Layers, placeholder: 'Domain to enumerate', color: '#00BCD4' },
-  { id: 'tech', label: 'TECH DETECT', icon: Code, placeholder: 'URL to fingerprint', color: '#9C27B0' },
-  { id: 'shodan', label: 'SHODAN IOT', icon: Network, placeholder: 'IP address', color: '#FF3D3D' },
-  { id: 'bgp', label: 'BGP ROUTE', icon: Globe, placeholder: 'IP or ASN', color: '#00E5FF' },
-  { id: 'mac', label: 'MAC ADDR', icon: Fingerprint, placeholder: 'MAC address', color: '#FFD700' },
-  { id: 'phone', label: 'PHONE INTEL', icon: Phone, placeholder: 'Phone number (e.g. +1...)', color: '#FF9500' },
-  { id: 'leaks', label: 'DATA LEAKS', icon: ShieldAlert, placeholder: 'Email address', color: '#E040FB' },
-  { id: 'github', label: 'GITHUB RECON', icon: Terminal, placeholder: 'GitHub username', color: '#87CEEB' },
-  { id: 'sweep', label: 'IP SWEEP', icon: Crosshair, placeholder: 'Enter IP address (e.g. 8.8.8.8)', color: '#FF3D3D' },
-];
+import { useLanguage } from '@/lib/i18n';
 
 interface OsintPanelProps { isOpen?: boolean; onClose?: () => void; isMobile?: boolean; onSweepVisualize?: (data: any) => void; onScanGeolocate?: (target: string, data: any) => void; }
 
 function OsintPanelInner({ isMobile, onSweepVisualize, onScanGeolocate }: OsintPanelProps) {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState('scanner');
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [query, setQuery] = useState('');
@@ -51,6 +32,26 @@ function OsintPanelInner({ isMobile, onSweepVisualize, onScanGeolocate }: OsintP
   const [sweepCidr, setSweepCidr] = useState(24);
   const [cveCache, setCveCache] = useState<Record<string, any>>({});
   const [expandedDevice, setExpandedDevice] = useState<string | null>(null);
+  
+  const TABS = [
+    { id: 'scanner', label: t('osintPanel.tabs.scanner'), icon: Radar, placeholder: t('osintPanel.placeholders.ipHostname'), color: '#00E5FF' },
+    { id: 'vuln', label: t('osintPanel.tabs.vuln'), icon: Bug, placeholder: t('osintPanel.placeholders.ipHostname'), color: '#FF3D3D' },
+    { id: 'dns', label: t('osintPanel.tabs.dns'), icon: Server, placeholder: t('osintPanel.placeholders.domain'), color: '#448AFF' },
+    { id: 'whois', label: t('osintPanel.tabs.whois'), icon: FileText, placeholder: t('osintPanel.placeholders.domain'), color: '#FFD700' },
+    { id: 'certs', label: t('osintPanel.tabs.certs'), icon: Lock, placeholder: t('osintPanel.placeholders.domain'), color: '#E040FB' },
+    { id: 'threats', label: t('osintPanel.tabs.threats'), icon: AlertTriangle, placeholder: t('osintPanel.placeholders.ipDomainHash'), color: '#FF9500' },
+    { id: 'headers', label: t('osintPanel.tabs.headers'), icon: Code, placeholder: t('osintPanel.placeholders.urlInspect'), color: '#87CEEB' },
+    { id: 'ssl', label: t('osintPanel.tabs.ssl'), icon: Shield, placeholder: t('osintPanel.placeholders.domain'), color: '#76FF03' },
+    { id: 'subdomains', label: t('osintPanel.tabs.subdomains'), icon: Layers, placeholder: t('osintPanel.placeholders.domainEnumerate'), color: '#00BCD4' },
+    { id: 'tech', label: t('osintPanel.tabs.tech'), icon: Code, placeholder: t('osintPanel.placeholders.urlInspect'), color: '#9C27B0' },
+    { id: 'shodan', label: t('osintPanel.tabs.shodan'), icon: Network, placeholder: t('osintPanel.placeholders.ipAddress'), color: '#FF3D3D' },
+    { id: 'bgp', label: t('osintPanel.tabs.bgp'), icon: Globe, placeholder: t('osintPanel.placeholders.ipAsn'), color: '#00E5FF' },
+    { id: 'mac', label: t('osintPanel.tabs.mac'), icon: Fingerprint, placeholder: t('osintPanel.placeholders.macAddress'), color: '#FFD700' },
+    { id: 'phone', label: t('osintPanel.tabs.phone'), icon: Phone, placeholder: t('osintPanel.placeholders.phoneNumber'), color: '#FF9500' },
+    { id: 'leaks', label: t('osintPanel.tabs.leaks'), icon: ShieldAlert, placeholder: t('osintPanel.placeholders.email'), color: '#E040FB' },
+    { id: 'github', label: t('osintPanel.tabs.github'), icon: Terminal, placeholder: t('osintPanel.placeholders.githubUsername'), color: '#87CEEB' },
+    { id: 'sweep', label: t('osintPanel.tabs.sweep'), icon: Crosshair, placeholder: t('osintPanel.placeholders.enterIp'), color: '#FF3D3D' },
+  ];
 
   // Fetch CVE details when a device is expanded in full-screen mode
   const fetchCveDetails = useCallback(async (cveIds: string[]) => {
@@ -709,7 +710,7 @@ function OsintPanelInner({ isMobile, onSweepVisualize, onScanGeolocate }: OsintP
               >
                 <div className="flex items-center gap-3">
                   <tab.icon className="w-5 h-5" style={{ color: tab.color }} />
-                  <span className="font-mono font-bold tracking-[0.1em] text-[11px]" style={{ color: tab.color }}>GLOBAL SWEEP</span>
+                  <span className="font-mono font-bold tracking-[0.1em] text-[11px]" style={{ color: tab.color }}>{t('osintPanel.actions.globalSweep')}</span>
                 </div>
             </button>
           ))}
@@ -720,7 +721,7 @@ function OsintPanelInner({ isMobile, onSweepVisualize, onScanGeolocate }: OsintP
           >
             <div className="flex items-center gap-3">
               <LocateFixed className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} style={{ color: '#00E676' }} />
-              <span className="font-mono font-bold tracking-[0.1em] text-[11px]" style={{ color: '#00E676' }}>{loading ? 'TRACKING...' : 'SELF TRACK'}</span>
+              <span className="font-mono font-bold tracking-[0.1em] text-[11px]" style={{ color: '#00E676' }}>{loading ? t('osintPanel.actions.tracking') : t('osintPanel.actions.selfTrack')}</span>
             </div>
           </button>
         </div>
@@ -750,7 +751,7 @@ function OsintPanelInner({ isMobile, onSweepVisualize, onScanGeolocate }: OsintP
           <button onClick={runLookup} disabled={loading || !query.trim()}
             className="px-4 py-2 rounded-lg text-[10px] font-mono font-bold tracking-wider disabled:opacity-30 transition-all flex items-center justify-center min-w-[70px]"
             style={{ backgroundColor: `${currentTab?.color}20`, border: `1px solid ${currentTab?.color}40`, color: currentTab?.color }}>
-            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'SCAN'}
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t('osintPanel.actions.scan')}
           </button>
         </div>
         
@@ -758,12 +759,12 @@ function OsintPanelInner({ isMobile, onSweepVisualize, onScanGeolocate }: OsintP
         {activeTab === 'scanner' && (
           <select value={scanType} onChange={e => setScanType(e.target.value)}
             className="bg-[var(--bg-primary)]/60 border border-[var(--border-primary)] rounded-lg px-2 py-1.5 text-[10px] font-mono text-[var(--text-muted)] outline-none w-full">
-            <option value="quick">QUICK SCAN</option><option value="deep">DEEP SCAN</option><option value="ports">TOP 1000 PORTS</option>
+            <option value="quick">{t('osintPanel.quickScan')}</option><option value="deep">{t('osintPanel.deepScan')}</option><option value="ports">{t('osintPanel.topPorts')}</option>
           </select>
         )}
         {(activeTab === 'sweep' || activeTab === 'vuln') && (
           <div className="flex items-center justify-between bg-[var(--bg-primary)]/60 border border-[var(--border-primary)] rounded-lg p-1">
-            <span className="text-[9px] font-mono text-[var(--text-muted)] pl-2">SUBNET MASK:</span>
+            <span className="text-[9px] font-mono text-[var(--text-muted)] pl-2">{t('osintPanel.subnetMask')}:</span>
             <div className="flex items-center gap-0.5">
               {[24, 25, 26, 27, 28].map(c => (
                 <button key={c} onClick={() => setSweepCidr(c)}
@@ -1041,7 +1042,7 @@ function OsintPanelInner({ isMobile, onSweepVisualize, onScanGeolocate }: OsintP
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-secondary)] bg-[#111]">
           <div className="flex items-center gap-3">
             <Radar className="w-5 h-5 text-[var(--cyan-primary)]" />
-            <span className="hud-text text-[16px] text-[var(--text-primary)]">OSIRIS RECON TOOLKIT</span>
+            <span className="hud-text text-[16px] text-[var(--text-primary)]">GÖKSEL RECON TOOLKIT</span>
             <span className="gotham-tag gotham-tag--info" style={{ fontSize: '9px' }}>EXPANDED VIEW</span>
             <span className="gotham-tag gotham-tag--classified" style={{ fontSize: '8px' }}>{TABS.length} MODULES</span>
           </div>
