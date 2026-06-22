@@ -75,6 +75,64 @@ const NADMORSKI_CAMERAS: CctvCamera[] = [
   { id: 'pl-nadm-10114', lat: 54.75885708303593, lng: 18.507906806608744, name: 'Chałupy - Solar EASY/SURF',              city: 'Chałupy',       country: 'Poland', stream_url: 'https://ls.tkchopin.pl/live/easysurf_1080P.stream/playlist.m3u8',                                             stream_type: 'hls', source: 'nadmorski24.pl' },
 ];
 
+// YouTube Live — konkretne kamery miejskie
+const YOUTUBE_CAMERAS: CctvCamera[] = [
+  {
+    id: 'pl-yt-warszawa-1',
+    lat: 52.2315, lng: 21.0067,
+    name: 'Warszawa - Śródmieście na żywo',
+    city: 'Warszawa', country: 'Poland',
+    stream_url: 'https://www.youtube.com/embed/AJGLajSFggk?autoplay=1&mute=1',
+    stream_type: 'iframe',
+    source: 'YouTube Live',
+  },
+  {
+    id: 'pl-yt-sanok-rynek',
+    lat: 49.5584, lng: 22.2048,
+    name: 'Sanok - Rynek',
+    city: 'Sanok', country: 'Poland',
+    stream_url: 'https://www.youtube.com/embed/mDDWtALSOw4?autoplay=1&mute=1',
+    stream_type: 'iframe',
+    source: 'YouTube Live',
+  },
+  {
+    id: 'pl-yt-pszczyna-rynek',
+    lat: 49.9789, lng: 18.9503,
+    name: 'Pszczyna - Rynek',
+    city: 'Pszczyna', country: 'Poland',
+    stream_url: 'https://www.youtube.com/embed/GakUUW9Anpo?autoplay=1&mute=1',
+    stream_type: 'iframe',
+    source: 'YouTube Live',
+  },
+  {
+    id: 'pl-yt-kluczbork-rynek',
+    lat: 50.9834, lng: 18.2191,
+    name: 'Kluczbork - Rynek',
+    city: 'Kluczbork', country: 'Poland',
+    stream_url: 'https://www.youtube.com/embed/KXs_8XSborU?autoplay=1&mute=1',
+    stream_type: 'iframe',
+    source: 'YouTube Live',
+  },
+  {
+    id: 'pl-yt-zambrow',
+    lat: 52.9874, lng: 22.2439,
+    name: 'Zambrów - ul. Białostocka',
+    city: 'Zambrów', country: 'Poland',
+    stream_url: 'https://www.youtube.com/embed/WqVkyusyXSg?autoplay=1&mute=1',
+    stream_type: 'iframe',
+    source: 'YouTube Live',
+  },
+  {
+    id: 'pl-yt-dabrowa-bial',
+    lat: 53.6494, lng: 23.3225,
+    name: 'Dąbrowa Białostocka - Plac Kościuszki',
+    city: 'Dąbrowa Białostocka', country: 'Poland',
+    stream_url: 'https://www.youtube.com/embed/frzJJajVQDo?autoplay=1&mute=1',
+    stream_type: 'iframe',
+    source: 'YouTube Live',
+  },
+];
+
 const POLAND_CAMERAS: CctvCamera[] = [
   {
     id: 'pl-slupsk-1',
@@ -84,6 +142,7 @@ const POLAND_CAMERAS: CctvCamera[] = [
     stream_type: 'mjpeg',
     source: 'Urząd Miasta Słupsk',
   },
+  ...YOUTUBE_CAMERAS,
   ...NADMORSKI_CAMERAS,
 ];
 
