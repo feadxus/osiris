@@ -17,6 +17,7 @@ import { fetchSpainCameras } from './spain';
 import { fetchPolandCameras } from './poland';
 import { fetchJapanCameras } from './japan';
 import { fetchSwitzerlandCameras } from './switzerland';
+import { fetchRussiaCameras } from './russia';
 
 /**
  * OSIRIS — Worldwide CCTV Camera API v2
@@ -419,6 +420,11 @@ const REGION_FETCHERS: Record<string, () => Promise<any[]>> = {
   'poland': fetchPolandCameras,
   'japan': fetchJapanCameras,
   'switzerland': fetchSwitzerlandCameras,
+  'kaliningrad': fetchKaliningradCameras,
+  'belarus': fetchBelarusCameras,
+  'ukraine': fetchUkraineCameras,
+  'russia': fetchRussiaCameras,
+  'latvia': fetchLatviaCameras,
 };
 
 // Determine which regions to fetch based on viewport bounds
@@ -448,6 +454,16 @@ function getRegionsForBounds(lat: number, lng: number, radius: number): string[]
   const inFrance = lat > 42.3 && lat < 51.1 && lng > -5 && lng < 8.3;
   const inSpain = lat > 27 && lat < 43.8 && lng > -18.2 && lng < 4.4;
   const inPoland = lat > 49.0 && lat < 54.8 && lng > 14.1 && lng < 24.1;
+  const inKaliningrad = lat > 54.2 && lat < 55.3 && lng > 19.7 && lng < 22.9;
+  const inLatvia = lat > 55.6 && lat < 58.1 && lng > 20.8 && lng < 28.3;
+  const inBelarus = lat > 50.5 && lat < 56.2 && lng > 23.2 && lng < 32.8;
+  const inUkraine = lat > 43.5 && lat < 52.5 && lng > 22.0 && lng < 40.3;
+  const inMoscow = lat > 54.5 && lat < 57 && lng > 36 && lng < 40;
+  const inSaintPetersburg = lat > 59.5 && lat < 61 && lng > 29 && lng < 32;
+  const inSamara = lat > 52.8 && lat < 53.6 && lng > 49.7 && lng < 50.6;
+  const inDombay = lat > 43.0 && lat < 43.6 && lng > 41.4 && lng < 42.1;
+  const inArkhangelsk = lat > 60.5 && lat < 65 && lng > 38 && lng < 47;
+  const inRussia = inMoscow || inSaintPetersburg || inSamara || inDombay || inArkhangelsk;
   const inBalkans = inBulgaria || inGreece || inSerbia || inMacedonia || inRomania || inTurkey;
   const inWesternEurope = inItaly || inCzechia || inSlovakia || inGermany || inFrance || inSpain || inPoland;
 
@@ -467,6 +483,11 @@ function getRegionsForBounds(lat: number, lng: number, radius: number): string[]
   if (inFrance) regions.push('france');
   if (inSpain) regions.push('spain');
   if (inPoland) regions.push('poland');
+  if (inKaliningrad) regions.push('kaliningrad');
+  if (inLatvia) regions.push('latvia');
+  if (inBelarus) regions.push('belarus');
+  if (inUkraine) regions.push('ukraine');
+  if (inRussia) regions.push('russia');
 
   // Middle East
   const inMiddleEast = lat > 29 && lat < 34.5 && lng > 34 && lng < 36.5;

@@ -1,0 +1,148 @@
+import type { CctvCamera } from './types';
+
+const RUSSIA_CAMERAS: CctvCamera[] = [
+  // ── Moskwa — inetcom.ru (HLS) ──
+  {
+    id: 'ru-msk-inetcom-1',
+    lat: 55.751161, lng: 37.987837,
+    name: 'Moskwa - Szosa Nosovikhinskoje / dom 9A',
+    city: 'Moskwa', country: 'Russia',
+    stream_url: 'https://cameras.inetcom.ru/hls/camera12_3.m3u8',
+    stream_type: 'hls',
+    source: 'inetcom.ru',
+  },
+  {
+    id: 'ru-msk-inetcom-2',
+    lat: 55.74854, lng: 37.703319,
+    name: 'Moskwa - Szosa Entuzjastów / 3. Obwodnica',
+    city: 'Moskwa', country: 'Russia',
+    stream_url: 'https://cameras.inetcom.ru/hls/camera12_2.m3u8',
+    stream_type: 'hls',
+    source: 'inetcom.ru',
+  },
+  {
+    id: 'ru-msk-inetcom-3',
+    lat: 55.737283, lng: 37.694371,
+    name: 'Moskwa - ul. Niżegorodskaja / 3. Obwodnica',
+    city: 'Moskwa', country: 'Russia',
+    stream_url: 'https://cameras.inetcom.ru/hls/camera12_1.m3u8',
+    stream_type: 'hls',
+    source: 'inetcom.ru',
+  },
+  {
+    id: 'ru-msk-inetcom-4',
+    lat: 55.705275, lng: 37.763057,
+    name: 'Moskwa - Prospekt Wołgogradzki / Metro Kuźminki',
+    city: 'Moskwa', country: 'Russia',
+    stream_url: 'https://cameras.inetcom.ru/hls/camera12_4.m3u8',
+    stream_type: 'hls',
+    source: 'inetcom.ru',
+  },
+  {
+    id: 'ru-msk-inetcom-5',
+    lat: 55.702101, lng: 37.792518,
+    name: 'Moskwa - Prospekt Wołgogradzki / ul. Akademika Skrjabina',
+    city: 'Moskwa', country: 'Russia',
+    stream_url: 'https://cameras.inetcom.ru/hls/camera12_5.m3u8',
+    stream_type: 'hls',
+    source: 'inetcom.ru',
+  },
+  {
+    id: 'ru-msk-inetcom-6',
+    lat: 55.697216, lng: 37.78975,
+    name: 'Moskwa - ul. Junykh Leninców / dom 125',
+    city: 'Moskwa', country: 'Russia',
+    stream_url: 'https://cameras.inetcom.ru/hls/camera12_6.m3u8',
+    stream_type: 'hls',
+    source: 'inetcom.ru',
+  },
+  {
+    id: 'ru-msk-inetcom-7',
+    lat: 55.692971, lng: 37.735698,
+    name: 'Moskwa - ul. Lublinskaja / ul. Szkuliowa',
+    city: 'Moskwa', country: 'Russia',
+    stream_url: 'https://cameras.inetcom.ru/hls/camera12_7.m3u8',
+    stream_type: 'hls',
+    source: 'inetcom.ru',
+  },
+  {
+    id: 'ru-msk-inetcom-8',
+    lat: 55.733498, lng: 37.671022,
+    name: 'Moskwa - Prospekt Wołgogradzki / Plac Kriestijanskaja Zastawa',
+    city: 'Moskwa', country: 'Russia',
+    stream_url: 'https://cameras.inetcom.ru/hls/camera12_8.m3u8',
+    stream_type: 'hls',
+    source: 'inetcom.ru',
+  },
+  {
+    id: 'ru-msk-inetcom-10',
+    lat: 55.731653, lng: 37.733456,
+    name: 'Moskwa - Prospekt Riazański / Szosa Frezier',
+    city: 'Moskwa', country: 'Russia',
+    stream_url: 'https://cameras.inetcom.ru/hls/camera12_10.m3u8',
+    stream_type: 'hls',
+    source: 'inetcom.ru',
+  },
+  {
+    id: 'ru-msk-inetcom-11',
+    lat: 55.707548, lng: 37.76884,
+    name: 'Moskwa - Plac Chwały / Metro Kuźminki',
+    city: 'Moskwa', country: 'Russia',
+    stream_url: 'https://cameras.inetcom.ru/hls/camera12_11.m3u8',
+    stream_type: 'hls',
+    source: 'inetcom.ru',
+  },
+  {
+    id: 'ru-msk-inetcom-12',
+    lat: 55.500223, lng: 37.569539,
+    name: 'Podolsk - ul. Sportivnaja / droga objazdowa',
+    city: 'Podolsk', country: 'Russia',
+    stream_url: 'https://cameras.inetcom.ru/hls/camera12_13.m3u8',
+    stream_type: 'hls',
+    source: 'inetcom.ru',
+  },
+  // ── Sankt Petersburg ──
+  {
+    id: 'ru-spb-bogatyrsky',
+    lat: 60.0127, lng: 30.2055,
+    name: 'Petersburg - ul. Bogatyrski / Turistskaya',
+    city: 'Sankt Petersburg', country: 'Russia',
+    stream_url: 'https://vkvideo.ru/video_ext.php?oid=1025087646&id=456239017&hd=1&autoplay=1',
+    stream_type: 'iframe',
+    source: 'geocam.ru',
+  },
+  // ── Samara ──
+  {
+    id: 'ru-samara-rossiya',
+    lat: 53.1959, lng: 50.1423,
+    name: 'Samara - Hotel Rossija (PTZ)',
+    city: 'Samara', country: 'Russia',
+    stream_url: 'https://runtime.strm.yandex.ru/player/episode/vple6deszgdh7b4shfys?autoplay=0&mute=0&tv=0&mute=1&autoplay=1&play_on_visible=true&hidden=sound',
+    stream_type: 'iframe',
+    source: 'geocam.ru',
+  },
+  // ── Obwód Archangielski ──
+  {
+    id: 'ru-arh-tegro-ozero',
+    lat: 61.1042, lng: 42.2671,
+    name: 'Tiegro-Oziero - ul. Mira / Zarząd Wiejski',
+    city: 'Tiegro-Oziero', country: 'Russia',
+    stream_url: 'https://videosrv.arhtc.ru:18080/hls/12652312/ed134e2396bf0eefd2b5/playlist.m3u8',
+    stream_type: 'hls',
+    source: 'geocam.ru',
+  },
+  // ── Dombaï (Kaukaz Północny) ──
+  {
+    id: 'ru-dombay-snezhny-bars',
+    lat: 43.2732, lng: 41.7370,
+    name: 'Dombaï - Hotel Sniezny Bars, g. Moussaaczytara',
+    city: 'Dombaï', country: 'Russia',
+    stream_url: 'https://ru.cloud.trassir.com/embed/NwudkdjgKdwUpqqe?lang=en',
+    stream_type: 'iframe',
+    source: 'geocam.ru',
+  },
+];
+
+export async function fetchRussiaCameras(): Promise<CctvCamera[]> {
+  return RUSSIA_CAMERAS;
+}
