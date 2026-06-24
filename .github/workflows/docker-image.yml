@@ -1,0 +1,76 @@
+name: Build Docker Images And Upload To Google Drive
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3.10.0
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y gzip xz-utils curl
+
+      - name: Install rclone
+        run: |
+          curl https://rclone.org/install.sh | sudo bash
+
+      - name: Setup rclone config
+        env:
+          RCLONE_SECRET_DATA: ${{ secrets.GOOGLE_FSXEDX_DRIVE }}
+        run: |
+          mkdir -p ~/.config/rclone
+          echo "$RCLONE_SECRET_DATA" > ~/.config/rclone/rclone.conf
+
+      - name: Verify rclone
+        run: |
+          rclone version
+          rclone listremotes
+
+      # 这里修改为编译 osiris 镜像，上下文直接设为当前根目录路径 '.'
+      - name: Build Osiris Image
+        run: |
+          docker build \
+            -t osiris:latest \
+            .
+
+      - name: Show Images
+        run: |
+          docker images
+
+      # 仅保存 osiris:latest 镜像到 tar 包中
+      - name: Save Docker Images
+        run: |
+          docker save \
+            osiris:latest \
+            -o all_images.tar
+
+      - name: Compress Images
+        run: |
+          xz -T0 -6 all_images.tar
+
+      - name: Show Archive Size
+        run: |
+          ls -lh all_images.tar.xz
+
+      - name: Create Google Drive Folder
+        run: |
+          rclone mkdir Google:/backup || true
+
+      - name: Upload To Google Drive
+        run: |
+          rclone copy \
+            all_images.tar.xz \
+            Google:/backup/
+
+      - name: Verify Upload
+        run: |
+          rclone lsf Google:/backup/
