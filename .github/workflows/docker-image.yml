@@ -35,22 +35,36 @@ jobs:
           rclone version
           rclone listremotes
 
-      # 这里修改为编译 osiris 镜像，上下文直接设为当前根目录路径 '.'
+      # 编译主程序镜像
       - name: Build Osiris Image
         run: |
           docker build \
             -t osiris:latest \
             .
 
+      # 编译 Intel 后端镜像
+      - name: Build Osiris Intel Image
+        run: |
+          docker build \
+            -t osiris-intel:latest \
+            ./intel
+
+      # 下载 nginx 官方镜像
+      - name: Pull Nginx Image
+        run: |
+          docker pull nginx:alpine
+
       - name: Show Images
         run: |
           docker images
 
-      # 仅保存 osiris:latest 镜像到 tar 包中
+      # 保存三个镜像到一个 tar
       - name: Save Docker Images
         run: |
           docker save \
             osiris:latest \
+            osiris-intel:latest \
+            nginx:alpine \
             -o all_images.tar
 
       - name: Compress Images
