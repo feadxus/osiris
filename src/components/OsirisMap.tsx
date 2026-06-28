@@ -137,22 +137,40 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     if (!containerRef.current || mapRef.current) return;
     
     // Select basemap style
-    const styleUrl = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+    //const styleUrl = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+
+    //const map = new maplibregl.Map({
+      //container: containerRef.current,
+      //style: styleUrl,
+      //center: [25.48, 42.70], zoom: 6.5, minZoom: 1.5, maxZoom: 18,
+      //attributionControl: false,
+      //maxPitch: 85,
+      //transformRequest: (url: string) => {
+        // Route all CARTO CDN requests through the internal Next.js proxy API
+        //if (url.includes('cartocdn.com')) {
+          //const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+          //return { url: `${baseUrl}/api/proxy-tiles?url=${encodeURIComponent(url)}` };
+        //}
+        //return { url };
+      //},
+    //});
+
+    // 1️⃣ 替换为你本地的 Martin 样式服务地址
+    const styleUrl = 'https://martin.eadx.com/style/dark-matter';
 
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: styleUrl,
-      center: [25.48, 42.70], zoom: 6.5, minZoom: 1.5, maxZoom: 18,
+      // 2️⃣ 极其重要:因为你的地图只有波尔图(Porto),中心点必须改成波尔图的经纬度!
+      // 否则默认的 [25.48, 42.70](保加利亚附近)打开是一片漆黑,zoom 也可以适当放大
+      center: [-8.6291, 41.1579], 
+      zoom: 12, 
+      minZoom: 1.5, 
+      maxZoom: 18,
       attributionControl: false,
       maxPitch: 85,
-      transformRequest: (url: string) => {
-        // Route all CARTO CDN requests through the internal Next.js proxy API
-        if (url.includes('cartocdn.com')) {
-          const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-          return { url: `${baseUrl}/api/proxy-tiles?url=${encodeURIComponent(url)}` };
-        }
-        return { url };
-      },
+      // 3️⃣ ⚠️ 注意:直接删掉原本的 transformRequest 逻辑!
+      // 因为你不需要再把请求转发给 Next.js 原来的 cartocdn 代理接口了
     });
 
     map.on('load', () => {
